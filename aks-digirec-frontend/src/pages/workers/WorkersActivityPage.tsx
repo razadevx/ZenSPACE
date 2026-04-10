@@ -219,12 +219,28 @@ export function WorkersActivityPage() {
       // Use worker's sectionGroup if available, otherwise fall back to activeSection
       const sectionGroup = worker.sectionGroup || activeSection;
 
-      await attendanceApi.markAttendance({
+      // If marking as absent, clear check-in/out times
+      const payload: MarkAttendancePayload = {
         workerId: worker.workerId,
         date: dateStr,
         status,
         sectionGroup: sectionGroup === 'all' ? undefined : sectionGroup,
-      });
+      };
+
+      // If marking as absent and worker has check-in, clear times
+      if (status === 'absent' && worker.checkIn) {
+        payload.checkIn = undefined;
+        payload.checkOut = undefined;
+      }
+
+      // If marking as present/half_day and no check-in exists, we don't auto-check-in
+      // The user must click the Check In button
+
+      if (worker._id) {
+        await attendanceApi.updateAttendance(worker._id, payload);
+      } else {
+        await attendanceApi.markAttendance(payload);
+      }
 
       toast.success(`Attendance marked as ${status}`);
       await loadAttendance();
@@ -246,16 +262,21 @@ export function WorkersActivityPage() {
       checkInTime.setHours(new Date().getHours(), new Date().getMinutes(), 0, 0);
 
       if (worker._id) {
-        await attendanceApi.updateAttendance(worker._id, {
+        // If checking in and status is absent, change to present
+        const updates: Partial<MarkAttendancePayload> = {
           checkIn: checkInTime.toISOString(),
-        });
+        };
+        if (worker.status === 'absent') {
+          updates.status = 'present';
+        }
+        await attendanceApi.updateAttendance(worker._id, updates);
       } else {
         // Use worker's sectionGroup if available, otherwise fall back to activeSection
         const sectionGroup = worker.sectionGroup || activeSection;
         await attendanceApi.markAttendance({
           workerId: worker.workerId,
           date: dateStr,
-          status: worker.status || 'present',
+          status: worker.status === 'absent' ? 'present' : (worker.status || 'present'),
           checkIn: checkInTime.toISOString(),
           sectionGroup: sectionGroup === 'all' ? undefined : sectionGroup,
         });
@@ -290,7 +311,7 @@ export function WorkersActivityPage() {
         await attendanceApi.markAttendance({
           workerId: worker.workerId,
           date: dateStr,
-          status: worker.status || 'present',
+          status: worker.status === 'absent' ? 'present' : (worker.status || 'present'),
           checkOut: checkOutTime.toISOString(),
           sectionGroup: sectionGroup === 'all' ? undefined : sectionGroup,
         });
