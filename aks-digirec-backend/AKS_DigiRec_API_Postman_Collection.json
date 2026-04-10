@@ -1,0 +1,732 @@
+{
+  "info": {
+    "_postman_id": "aks-digirec-api-collection",
+    "name": "AKS DigiRec API",
+    "description": "Complete API collection for AKS DigiRec ERP System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"companyName\": \"My Ceramics Factory\",\n  \"phone\": \"+923001234567\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/me"
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"password123\",\n  \"newPassword\": \"newpassword123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/users?page=1&limit=50"
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane@example.com\",\n  \"roleId\": \"role_id_here\",\n  \"phone\": \"+923001234568\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/users/{{userId}}"
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/users/{{userId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Jane Updated\",\n  \"phone\": \"+923001234569\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/users/{{userId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "Get My Company",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/companies/my"
+          }
+        },
+        {
+          "name": "Update Company",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/companies/{{companyId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Company Name\",\n  \"theme\": \"light\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/companies/settings/my",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settings\": {\n    \"stockMethod\": \"FIFO\",\n    \"decimalPlaces\": 2\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Master Data",
+      "item": [
+        {
+          "name": "Sections",
+          "item": [
+            {
+              "name": "Get Sections",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{baseUrl}}/api/master/sections"
+              }
+            },
+            {
+              "name": "Create Section",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{baseUrl}}/api/master/sections",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": {\n    \"en\": \"Production Line 1\",\n    \"ur\": \"پروڈکشن لائن 1\"\n  },\n  \"type\": \"production\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Raw Materials",
+          "item": [
+            {
+              "name": "Get Raw Materials",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{baseUrl}}/api/master/raw-materials?page=1&limit=50"
+              }
+            },
+            {
+              "name": "Create Raw Material",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{baseUrl}}/api/master/raw-materials",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": {\n    \"en\": \"White Clay\",\n    \"ur\": \"سفید مٹی\"\n  },\n  \"materialType\": \"material_type_id\",\n  \"unit\": \"unit_id\",\n  \"inventory\": {\n    \"minLevel\": 100,\n    \"reorderLevel\": 200\n  }\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Workers",
+          "item": [
+            {
+              "name": "Get Workers",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{baseUrl}}/api/master/workers"
+              }
+            },
+            {
+              "name": "Create Worker",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{baseUrl}}/api/master/workers",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Ahmed\",\n  \"lastName\": \"Khan\",\n  \"cnic\": \"35201-1234567-8\",\n  \"designation\": \"Machine Operator\",\n  \"joinDate\": \"2024-01-01\",\n  \"wages\": {\n    \"type\": \"daily\",\n    \"amount\": 800\n  }\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Suppliers",
+          "item": [
+            {
+              "name": "Get Suppliers",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{baseUrl}}/api/master/suppliers"
+              }
+            },
+            {
+              "name": "Create Supplier",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{baseUrl}}/api/master/suppliers",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"businessName\": \"ABC Materials Ltd\",\n  \"contactPerson\": {\n    \"name\": \"John Smith\",\n    \"phone\": \"+923001234567\"\n  },\n  \"creditTerms\": {\n    \"limit\": 500000,\n    \"days\": 30\n  }\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customers",
+          "item": [
+            {
+              "name": "Get Customers",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{baseUrl}}/api/master/customers"
+              }
+            },
+            {
+              "name": "Create Customer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{baseUrl}}/api/master/customers",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"XYZ Traders\",\n  \"customerType\": \"business\",\n  \"creditTerms\": {\n    \"limit\": 100000,\n    \"days\": 15\n  }\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Finished Goods",
+          "item": [
+            {
+              "name": "Get Finished Goods",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{baseUrl}}/api/master/finished-goods"
+              }
+            },
+            {
+              "name": "Create Finished Good",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{baseUrl}}/api/master/finished-goods",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": {\n    \"en\": \"Ceramic Tile 12x12\",\n    \"ur\": \"سرامک ٹائل 12x12\"\n  },\n  \"category\": \"tiles\",\n  \"unit\": \"unit_id\",\n  \"pricing\": {\n    \"costPrice\": 100,\n    \"retailPrice\": 150\n  }\n}"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Accounting",
+      "item": [
+        {
+          "name": "Get Account Groups",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/accounting/account-groups"
+          }
+        },
+        {
+          "name": "Get Ledger Accounts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/accounting/ledger-accounts"
+          }
+        },
+        {
+          "name": "Get Chart of Accounts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/accounting/chart-of-accounts"
+          }
+        },
+        {
+          "name": "Create Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/accounting/transactions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2024-01-15\",\n  \"type\": \"journal\",\n  \"description\": {\n    \"en\": \"Sample Journal Entry\"\n  },\n  \"entries\": [\n    {\n      \"accountId\": \"account_id_1\",\n      \"entryType\": \"debit\",\n      \"amount\": 1000\n    },\n    {\n      \"accountId\": \"account_id_2\",\n      \"entryType\": \"credit\",\n      \"amount\": 1000\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Post Transaction",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/accounting/transactions/{{transactionId}}/post"
+          }
+        },
+        {
+          "name": "Get Trial Balance",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/accounting/trial-balance?asOfDate=2024-01-31"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Get Stock Ledger",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/inventory/stock-ledger"
+          }
+        },
+        {
+          "name": "Get Stock Balance",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/inventory/stock-balance/raw_material/{{materialId}}"
+          }
+        },
+        {
+          "name": "Get Processed Stock",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/inventory/processed-stock"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workers",
+      "item": [
+        {
+          "name": "Get Activities",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/workers/activities"
+          }
+        },
+        {
+          "name": "Record Activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/workers/activities",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workerId\": \"worker_id\",\n  \"date\": \"2024-01-15\",\n  \"activityType\": \"production\",\n  \"timeTracking\": {\n    \"checkIn\": \"2024-01-15T08:00:00Z\",\n    \"checkOut\": \"2024-01-15T17:00:00Z\"\n  },\n  \"production\": {\n    \"quantityProduced\": 100,\n    \"quantityApproved\": 95\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Payments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/workers/payments"
+          }
+        },
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/workers/payments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workerId\": \"worker_id\",\n  \"period\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"type\": \"monthly\"\n  },\n  \"paymentDate\": \"2024-02-01\",\n  \"paymentMethod\": \"cash\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Production",
+      "item": [
+        {
+          "name": "Get Batches",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/production/batches"
+          }
+        },
+        {
+          "name": "Create Batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/production/batches",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"finishedGood\": \"finished_good_id\",\n  \"targetQuantity\": 1000,\n  \"materialsConsumed\": [\n    {\n      \"material\": \"material_id\",\n      \"quantity\": 500,\n      \"unit\": \"unit_id\"\n    }\n  ],\n  \"stages\": [\n    { \"stage\": \"section_id\", \"name\": \"Mixing\" },\n    { \"stage\": \"section_id\", \"name\": \"Forming\" }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Start Production",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/production/batches/{{batchId}}/start"
+          }
+        },
+        {
+          "name": "Update Stage",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/production/batches/{{batchId}}/stage/1",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"outputQuantity\": 950,\n  \"rejectedQuantity\": 50,\n  \"workers\": [\"worker_id_1\", \"worker_id_2\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "Complete Production",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/production/batches/{{batchId}}/complete",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualOutput\": {\n    \"quantity\": 900,\n    \"approved\": 850,\n    \"rejected\": 50\n  },\n  \"quality\": {\n    \"grade\": \"A\",\n    \"remarks\": \"Good quality\"\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cash Register",
+      "item": [
+        {
+          "name": "Get Sales",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/cash-register/sales"
+          }
+        },
+        {
+          "name": "Create Sale Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/cash-register/sales",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer\": \"customer_id\",\n  \"invoiceDate\": \"2024-01-15\",\n  \"items\": [\n    {\n      \"finishedGood\": \"finished_good_id\",\n      \"quantity\": 100,\n      \"unitPrice\": 150\n    }\n  ],\n  \"payment\": {\n    \"method\": \"credit\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Record Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/cash-register/sales/{{invoiceId}}/payment",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 5000,\n  \"method\": \"cash\",\n  \"reference\": \"Receipt #123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Purchases",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/cash-register/purchases"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bank",
+      "item": [
+        {
+          "name": "Get Bank Accounts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/bank/accounts"
+          }
+        },
+        {
+          "name": "Create Bank Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/bank/accounts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankName\": \"Habib Bank Limited\",\n  \"accountNumber\": \"1234567890\",\n  \"accountTitle\": \"My Company\",\n  \"accountType\": \"current\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Bank Transactions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/bank/transactions"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/reports/dashboard"
+          }
+        },
+        {
+          "name": "Stock Report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/reports/stock"
+          }
+        },
+        {
+          "name": "Trial Balance",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/reports/trial-balance"
+          }
+        },
+        {
+          "name": "Profit & Loss",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/reports/profit-loss?from=2024-01-01&to=2024-01-31"
+          }
+        },
+        {
+          "name": "Production Report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/reports/production?from=2024-01-01&to=2024-01-31"
+          }
+        },
+        {
+          "name": "Sales Report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/reports/sales?from=2024-01-01&to=2024-01-31"
+          }
+        },
+        {
+          "name": "Aging Report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/reports/aging?type=receivable"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "companyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

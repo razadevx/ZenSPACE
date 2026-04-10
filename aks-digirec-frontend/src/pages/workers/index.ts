@@ -1,0 +1,1 @@
+export { WorkersActivityPage } from './WorkersActivityPage';
