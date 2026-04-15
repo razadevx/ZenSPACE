@@ -1,6 +1,17 @@
 import apiClient from '../interceptors/axiosConfig';
 import type { ApiResponse } from '@/types';
 
+export interface WageCalculation {
+  hourlyRate: number;
+  overtimeRate: number;
+  dailyRate: number;
+  regularHours: number;
+  overtimeHours: number;
+  regularWages: number;
+  overtimeWages: number;
+  totalWages: number;
+}
+
 export interface AttendanceRecord {
   _id: string | null;
   workerId: string;
@@ -19,12 +30,17 @@ export interface AttendanceRecord {
   isApproved: boolean;
   sectionGroup: string | null;
   hasAttendance: boolean;
-  balanceBF?: number;
-  workedAmount?: number;
-  advanceDaily?: number;
-  amountToPay?: number;
-  paid?: number;
-  balanceCF?: number;
+  // Payment fields
+  balanceBF: number;
+  workedAmount: number;
+  advanceAmount: number;
+  amountToPay: number;
+  paidAmount: number;
+  balanceCF: number;
+  paymentStatus: 'unpaid' | 'partial' | 'paid';
+  wageCalculation: WageCalculation;
+  workerWageType: string;
+  workerWageAmount: number;
 }
 
 export interface AttendanceSummary {
@@ -36,6 +52,12 @@ export interface AttendanceSummary {
   holiday: number;
   totalWorkingHours: number;
   totalOvertimeHours: number;
+  // Payment summaries
+  totalWorkedAmount: number;
+  totalAdvanceAmount: number;
+  totalPaidAmount: number;
+  totalAmountToPay: number;
+  totalBalanceCF: number;
 }
 
 export interface MarkAttendancePayload {
@@ -71,6 +93,11 @@ export const attendanceApi = {
       holiday: 0,
       totalWorkingHours: 0,
       totalOvertimeHours: 0,
+      totalWorkedAmount: 0,
+      totalAdvanceAmount: 0,
+      totalPaidAmount: 0,
+      totalAmountToPay: 0,
+      totalBalanceCF: 0,
     };
     return { data, summary };
   },
@@ -101,6 +128,12 @@ export const attendanceApi = {
   // Delete attendance
   deleteAttendance: async (id: string): Promise<void> => {
     await apiClient.delete(`/attendance/${id}`);
+  },
+
+  // Record payment/advance for attendance
+  recordPayment: async (id: string, payload: { advanceAmount?: number; paidAmount?: number }): Promise<AttendanceRecord> => {
+    const response = await apiClient.put<ApiResponse<AttendanceRecord>>(`/attendance/${id}/payment`, payload);
+    return (response.data as any).data;
   },
 
   // Export attendance to Excel

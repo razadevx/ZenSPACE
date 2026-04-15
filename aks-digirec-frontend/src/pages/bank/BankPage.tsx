@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   Landmark, ArrowUpRight, ArrowDownRight, Plus,
-  CheckCircle, XCircle, Clock
+  CheckCircle, XCircle, Clock, Pencil, Trash2, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useUIStore } from '@/stores';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { bankApi, type BankAccount, type BankTransaction } from '@/api/services';
+import { bankApi, type BankAccount, type BankTransaction, type Cheque } from '@/api/services';
+import { BankAccountForm, BankTransactionForm, ChequeForm } from '@/components/bank';
 import { toast } from 'sonner';
 import gsap from 'gsap';
 
@@ -20,12 +21,21 @@ export function BankPage() {
   const [activeTab, setActiveTab] = useState('accounts');
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
+  const [cheques, setCheques] = useState<Cheque[]>([]);
+  const [summary, setSummary] = useState({ totalBalance: 0, accountCount: 0, pendingCheques: 0, clearedCheques: 0 });
   const [isLoading, setIsLoading] = useState(false);
   
+  // Form modals state
+  const [isAccountFormOpen, setIsAccountFormOpen] = useState(false);
+  const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(false);
+  const [isChequeFormOpen, setIsChequeFormOpen] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null);
+
   useEffect(() => {
     setPageTitle(t('navigation.cashBank'));
   }, [setPageTitle, t]);
-  
+
   useEffect(() => {
     gsap.fromTo(
       '.bank-content',
@@ -33,81 +43,63 @@ export function BankPage() {
       { opacity: 1, y: 0, duration: 0.5 }
     );
   }, []);
-  
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [accountsData, transactionsData] = await Promise.all([
-          bankApi.getBankAccounts(),
-          bankApi.getBankTransactions(),
-        ]);
-        setAccounts(accountsData);
-        setTransactions(transactionsData.data);
-      } catch (error: any) {
-        toast.error('Failed to load bank data: ' + (error.response?.data?.message || error.message));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchData();
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [accountsData, summaryData, transactionsData, chequesData] = await Promise.all([
+        bankApi.getBankAccounts(),
+        bankApi.getBankSummary(),
+        bankApi.getBankTransactions(),
+        bankApi.getCheques()
+      ]);
+      setAccounts(accountsData);
+      setSummary(summaryData);
+      setTransactions(transactionsData.data);
+      setCheques(chequesData.data);
+    } catch (error: any) {
+      toast.error('Failed to load bank data: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
-  
-  const demoAccounts: BankAccount[] = accounts.length > 0 ? accounts : [
-    {
-      _id: '1',
-      bankName: 'Habib Bank Limited',
-      accountNumber: '1234567890',
-      accountType: 'Current',
-      balance: 150000,
-      isActive: true,
-      companyId: '',
-    },
-    {
-      _id: '2', 
-      bankName: 'Muslim Commercial Bank',
-      accountNumber: '0987654321',
-      accountType: 'Savings',
-      balance: 75000,
-      isActive: true,
-      companyId: '',
-    },
-  ];
-  
-  interface Cheque {
-    id: string;
-    chequeNo: string;
-    date: Date;
-    amount: number;
-    party: string;
-    type: 'issued' | 'received';
-    status: 'issued' | 'cleared' | 'bounced' | 'cancelled';
-  }
-  
-  const demoCheques: Cheque[] = [
-    {
-      id: '1',
-      chequeNo: '000123',
-      date: new Date(),
-      amount: 50000,
-      party: 'ABC Traders',
-      type: 'issued',
-      status: 'cleared',
-    },
-    {
-      id: '2',
-      chequeNo: '000124',
-      date: new Date(),
-      amount: 25000,
-      party: 'XYZ Suppliers',
-      type: 'received',
-      status: 'issued',
-    },
-  ];
-  
-  const totalBalance = demoAccounts.reduce((sum, acc) => sum + acc.balance, 0);
-  
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleDeleteAccount = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this account?')) return;
+    try {
+      await bankApi.deleteBankAccount(id);
+      toast.success('Account deleted successfully');
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to delete account');
+    }
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this transaction?')) return;
+    try {
+      await bankApi.deleteBankTransaction(id);
+      toast.success('Transaction deleted successfully');
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to delete transaction');
+    }
+  };
+
+  const handleUpdateChequeStatus = async (id: string, status: 'cleared' | 'bounced' | 'cancelled') => {
+    try {
+      await bankApi.updateChequeStatus(id, status);
+      toast.success(`Cheque marked as ${status}`);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update cheque status');
+    }
+  };
+
   const getChequeStatusIcon = (status: string) => {
     switch (status) {
       case 'cleared': return <CheckCircle className="h-4 w-4 text-green-500" />;
@@ -116,38 +108,79 @@ export function BankPage() {
       default: return <Clock className="h-4 w-4 text-yellow-500" />;
     }
   };
-  
+
+  const getTransactionTypeIcon = (type: string) => {
+    const isCredit = ['deposit', 'transfer_in', 'cheque_deposit', 'interest'].includes(type);
+    return isCredit ? 
+      <ArrowDownRight className="h-3 w-3 text-green-500" /> : 
+      <ArrowUpRight className="h-3 w-3 text-red-500" />;
+  };
+
+  if (isLoading && accounts.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="bank-content space-y-6">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">{t('navigation.cashBank')}</h1>
-          <p className="text-muted-foreground">
-            Manage bank accounts and cheque transactions
-          </p>
+          <p className="text-muted-foreground">Manage bank accounts and cheque transactions</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Account
-        </Button>
+        {activeTab === 'accounts' && (
+          <Button onClick={() => { setSelectedAccount(null); setIsAccountFormOpen(true); }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Account
+          </Button>
+        )}
+        {activeTab === 'transactions' && (
+          <Button onClick={() => { setSelectedTransaction(null); setIsTransactionFormOpen(true); }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Transaction
+          </Button>
+        )}
+        {activeTab === 'cheques' && (
+          <Button onClick={() => setIsChequeFormOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Cheque
+          </Button>
+        )}
       </div>
-      
-      {/* Total Balance Card */}
-      <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-primary-foreground/80">Total Bank Balance</p>
-              <p className="text-4xl font-bold">{formatCurrency(totalBalance)}</p>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground md:col-span-2">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-primary-foreground/80">Total Bank Balance</p>
+                <p className="text-4xl font-bold">{formatCurrency(summary.totalBalance)}</p>
+              </div>
+              <div className="p-4 bg-white/20 rounded-xl">
+                <Landmark className="h-8 w-8" />
+              </div>
             </div>
-            <div className="p-4 bg-white/20 rounded-xl">
-              <Landmark className="h-8 w-8" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground text-sm">Total Accounts</p>
+            <p className="text-3xl font-bold">{summary.accountCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground text-sm">Pending Cheques</p>
+            <p className="text-3xl font-bold text-yellow-600">{summary.pendingCheques}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid grid-cols-3">
@@ -155,134 +188,194 @@ export function BankPage() {
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="cheques">Cheques</TabsTrigger>
         </TabsList>
-        
+
+        {/* Accounts Tab */}
         <TabsContent value="accounts" className="m-0 mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {demoAccounts.map((account) => (
-              <Card key={account._id}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold text-lg">{account.accountType} Account</p>
-                      <p className="text-sm text-muted-foreground">{account.bankName}</p>
-                      <p className="text-sm text-muted-foreground font-mono mt-1">
-                        {account.accountNumber}
-                      </p>
+          {accounts.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Landmark className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No bank accounts found. Add your first account to get started.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {accounts.map((account) => (
+                <Card key={account._id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-lg capitalize">{account.accountType} Account</p>
+                        <p className="text-sm text-muted-foreground">{account.bankName}</p>
+                        <p className="text-sm text-muted-foreground font-mono mt-1">{account.accountNumber}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => { setSelectedAccount(account); setIsAccountFormOpen(true); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteAccount(account._id)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <Landmark className="h-5 w-5 text-primary" />
+                    <div className="mt-4 pt-4 border-t">
+                      <p className="text-sm text-muted-foreground">Current Balance</p>
+                      <p className="text-2xl font-bold">{formatCurrency(account.currentBalance?.amount || 0)}</p>
                     </div>
-                  </div>
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-sm text-muted-foreground">Current Balance</p>
-                    <p className="text-2xl font-bold">{formatCurrency(account.balance)}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
-        
+
+        {/* Transactions Tab */}
         <TabsContent value="transactions" className="m-0 mt-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Recent Transactions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-3 font-medium">Date</th>
-                      <th className="text-left p-3 font-medium">Description</th>
-                      <th className="text-left p-3 font-medium">Account</th>
-                      <th className="text-right p-3 font-medium">Amount</th>
-                      <th className="text-center p-3 font-medium">Type</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b hover:bg-muted/50">
-                      <td className="p-3">{formatDate(new Date())}</td>
-                      <td className="p-3">Deposit from Sales</td>
-                      <td className="p-3">Main Account</td>
-                      <td className="p-3 text-right text-green-600 font-medium">
-                        +{formatCurrency(50000)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant="outline" className="flex items-center gap-1">
-                          <ArrowDownRight className="h-3 w-3 text-green-500" />
-                          Credit
-                        </Badge>
-                      </td>
-                    </tr>
-                    <tr className="border-b hover:bg-muted/50">
-                      <td className="p-3">{formatDate(new Date())}</td>
-                      <td className="p-3">Payment to Supplier</td>
-                      <td className="p-3">Business Account</td>
-                      <td className="p-3 text-right text-red-600 font-medium">
-                        -{formatCurrency(25000)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant="outline" className="flex items-center gap-1">
-                          <ArrowUpRight className="h-3 w-3 text-red-500" />
-                          Debit
-                        </Badge>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              {transactions.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No transactions found.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-medium">Date</th>
+                        <th className="text-left p-3 font-medium">Description</th>
+                        <th className="text-left p-3 font-medium">Account</th>
+                        <th className="text-right p-3 font-medium">Amount</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-center p-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.map((tx) => (
+                        <tr key={tx._id} className="border-b hover:bg-muted/50">
+                          <td className="p-3">{formatDate(tx.transactionDate)}</td>
+                          <td className="p-3">{tx.description}</td>
+                          <td className="p-3">
+                            {typeof tx.bankAccount === 'object' ? tx.bankAccount.bankName : 'Unknown'}
+                          </td>
+                          <td className="p-3 text-right">
+                            <span className={['deposit', 'transfer_in', 'cheque_deposit', 'interest'].includes(tx.type) ? 'text-green-600' : 'text-red-600'}>
+                              {['deposit', 'transfer_in', 'cheque_deposit', 'interest'].includes(tx.type) ? '+' : '-'}
+                              {formatCurrency(tx.amount)}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <Badge variant={tx.status === 'cleared' ? 'default' : 'outline'}>
+                              {tx.status}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex justify-center gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => { setSelectedTransaction(tx); setIsTransactionFormOpen(true); }}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteTransaction(tx._id)}>
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
-        
+
+        {/* Cheques Tab */}
         <TabsContent value="cheques" className="m-0 mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle className="text-lg">Cheque Management</CardTitle>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Cheque
-              </Button>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-3 font-medium">Cheque No</th>
-                      <th className="text-left p-3 font-medium">Date</th>
-                      <th className="text-left p-3 font-medium">Party</th>
-                      <th className="text-right p-3 font-medium">Amount</th>
-                      <th className="text-center p-3 font-medium">Type</th>
-                      <th className="text-center p-3 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {demoCheques.map((cheque) => (
-                      <tr key={cheque.id} className="border-b hover:bg-muted/50">
-                        <td className="p-3 font-medium">{cheque.chequeNo}</td>
-                        <td className="p-3">{formatDate(cheque.date)}</td>
-                        <td className="p-3">{cheque.party}</td>
-                        <td className="p-3 text-right">{formatCurrency(cheque.amount)}</td>
-                        <td className="p-3 text-center">
-                          <Badge variant="outline">{cheque.type}</Badge>
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {getChequeStatusIcon(cheque.status)}
-                            <span className="capitalize">{cheque.status}</span>
-                          </div>
-                        </td>
+              {cheques.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No cheques found.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-medium">Cheque No</th>
+                        <th className="text-left p-3 font-medium">Date</th>
+                        <th className="text-left p-3 font-medium">Party</th>
+                        <th className="text-right p-3 font-medium">Amount</th>
+                        <th className="text-center p-3 font-medium">Type</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-center p-3 font-medium">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {cheques.map((cheque) => (
+                        <tr key={cheque._id} className="border-b hover:bg-muted/50">
+                          <td className="p-3 font-medium">{cheque.cheque?.number}</td>
+                          <td className="p-3">{formatDate(cheque.cheque?.date || cheque.createdAt)}</td>
+                          <td className="p-3">{cheque.party?.name || 'Unknown'}</td>
+                          <td className="p-3 text-right">{formatCurrency(cheque.amount)}</td>
+                          <td className="p-3 text-center">
+                            <Badge variant="outline">
+                              {cheque.type === 'cheque_deposit' ? 'Received' : 'Issued'}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {getChequeStatusIcon(cheque.cheque?.status || 'pending')}
+                              <span className="capitalize">{cheque.cheque?.status || 'pending'}</span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            {cheque.cheque?.status === 'pending' && (
+                              <div className="flex justify-center gap-1">
+                                <Button size="sm" variant="ghost" onClick={() => handleUpdateChequeStatus(cheque._id, 'cleared')}>
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => handleUpdateChequeStatus(cheque._id, 'bounced')}>
+                                  <XCircle className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Form Modals */}
+      <BankAccountForm
+        isOpen={isAccountFormOpen}
+        onClose={() => setIsAccountFormOpen(false)}
+        account={selectedAccount}
+        onSuccess={fetchData}
+      />
+
+      <BankTransactionForm
+        isOpen={isTransactionFormOpen}
+        onClose={() => setIsTransactionFormOpen(false)}
+        accounts={accounts}
+        transaction={selectedTransaction}
+        onSuccess={fetchData}
+      />
+
+      <ChequeForm
+        isOpen={isChequeFormOpen}
+        onClose={() => setIsChequeFormOpen(false)}
+        accounts={accounts}
+        onSuccess={fetchData}
+      />
     </div>
   );
 }

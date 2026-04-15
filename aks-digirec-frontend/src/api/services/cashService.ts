@@ -29,13 +29,46 @@ export interface PurchaseInvoice {
   _id: string;
   invoiceNumber: string;
   invoiceDate: string;
-  supplier?: { _id: string; businessName?: string };
+  supplier?: { _id: string; businessName?: string; name?: string | { en?: string; ur?: string } };
   summary: { grandTotal: number; subtotal: number };
   payment: { method: string; status: string; paidAmount: number; balanceDue: number };
   status: string;
   returnInfo?: { isReturned: boolean; returnDate?: string; returnAmount?: number; reason?: string };
 }
 
+export interface UnifiedTransaction {
+  _id: string;
+  documentNo: string;
+  transactionNumber?: string;
+  transactionDate: string;
+  type: 'SALE' | 'PURCHASE' | 'SALES_RETURN' | 'PURCHASE_RETURN' | 'EXPENSE' | 'INCOME' | 'RECEIPT' | 'PAYMENT' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'ADJUSTMENT';
+  direction: 'in' | 'out';
+  partyId?: { _id: string; name?: string; businessName?: string };
+  partyType?: string;
+  partyName?: string;
+  amount: number;
+  description?: string;
+  paymentMode: string;
+  cashAccount?: { _id: string; name: string };
+  status: 'draft' | 'confirmed' | 'cancelled';
+  category?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UnifiedSummary {
+  totalSales: number;
+  totalPurchases: number;
+  totalSalesReturns: number;
+  totalPurchaseReturns: number;
+  totalExpenses: number;
+  totalIncome: number;
+  netCash: number;
+  counts: Record<string, { total: number; count: number }>;
+  date: string;
+}
+
+// Legacy interface for backward compatibility
 export interface CashTransaction {
   _id?: string;
   transactionNumber?: string;
@@ -144,5 +177,37 @@ export const cashApi = {
   createTransaction: async (data: CreateTransactionPayload): Promise<CashTransaction> => {
     const response = await apiClient.post(`${BASE}/transactions`, data);
     return (response.data as any).data;
+  },
+
+  // ─── Unified Transaction API ──────────────────────────────────────────────────
+  getUnifiedTransactions: async (params?: { type?: string; from?: string; to?: string; page?: number; limit?: number; search?: string }): Promise<UnifiedTransaction[]> => {
+    const response = await apiClient.get(`${BASE}/unified`, { params });
+    return extractList<UnifiedTransaction>(response);
+  },
+
+  getUnifiedSummary: async (date?: string): Promise<UnifiedSummary> => {
+    const params = date ? { date } : {};
+    const response = await apiClient.get<ApiResponse<UnifiedSummary>>(`${BASE}/unified/summary`, { params });
+    const payload = (response.data as any).data ?? response.data;
+    return {
+      totalSales: payload.totalSales ?? 0,
+      totalPurchases: payload.totalPurchases ?? 0,
+      totalSalesReturns: payload.totalSalesReturns ?? 0,
+      totalPurchaseReturns: payload.totalPurchaseReturns ?? 0,
+      totalExpenses: payload.totalExpenses ?? 0,
+      totalIncome: payload.totalIncome ?? 0,
+      netCash: payload.netCash ?? 0,
+      counts: payload.counts ?? {},
+      date: payload.date ?? ''
+    };
+  },
+
+  createUnifiedTransaction: async (data: any): Promise<UnifiedTransaction> => {
+    const response = await apiClient.post(`${BASE}/unified`, data);
+    return (response.data as any).data;
+  },
+
+  cancelUnifiedTransaction: async (id: string): Promise<void> => {
+    await apiClient.patch(`${BASE}/unified/${id}/cancel`);
   },
 };

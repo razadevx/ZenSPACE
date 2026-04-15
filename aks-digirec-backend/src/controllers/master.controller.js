@@ -556,6 +556,7 @@ const transformWorker = (w) => {
     cellNumber: doc.mobile || doc.phone || doc.cellNumber || '',
     joinDate: doc.joinDate,
     status: doc.status || (doc.isActive !== false ? 'active' : 'inactive'),
+    wages: doc.wages || { type: 'monthly', amount: 0, currency: 'PKR' },
   };
 };
 
@@ -631,12 +632,22 @@ const prepareWorkerPayload = async (data, companyId) => {
     const mappedWorkerType = workerTypeMap[data.workerType] || 'contract';
     payload.workerType = mappedWorkerType;
 
-    // Also set wages.type
-    const mappedWagesType = wagesTypeMap[data.workerType] || 'monthly';
-    payload.wages = {
-      type: mappedWagesType,
-      currency: 'PKR'
-    };
+    // Use wages object from frontend if provided, otherwise map from workerType
+    if (data.wages && data.wages.type && data.wages.amount) {
+      payload.wages = {
+        type: data.wages.type,
+        amount: parseFloat(data.wages.amount) || 0,
+        overtimeRate: data.wages.overtimeRate ? parseFloat(data.wages.overtimeRate) : undefined,
+        currency: data.wages.currency || 'PKR'
+      };
+    } else {
+      // Also set wages.type
+      const mappedWagesType = wagesTypeMap[data.workerType] || 'monthly';
+      payload.wages = {
+        type: mappedWagesType,
+        currency: 'PKR'
+      };
+    }
   } else {
     payload.workerType = 'contract'; // Default
     payload.wages = { type: 'monthly', currency: 'PKR' };

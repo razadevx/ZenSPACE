@@ -269,8 +269,16 @@ router.get('/transactions', hasPermission('cash.view'), async (req, res) => {
 
   if (from || to) {
     query.transactionDate = {};
-    if (from) query.transactionDate.$gte = new Date(from);
-    if (to) query.transactionDate.$lte = new Date(to);
+    if (from) {
+      const fromDate = new Date(from);
+      fromDate.setHours(0, 0, 0, 0);
+      query.transactionDate.$gte = fromDate;
+    }
+    if (to) {
+      const toDate = new Date(to);
+      toDate.setHours(23, 59, 59, 999);
+      query.transactionDate.$lte = toDate;
+    }
   } else {
     const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
@@ -292,14 +300,111 @@ router.get('/transactions', hasPermission('cash.view'), async (req, res) => {
   });
 });
 
-router.post('/transactions', hasPermission('cash.create'), async (req, res) => {
-  const CashTransaction = require('../models/CashTransaction');
-  const transaction = await CashTransaction.create({
-    ...req.body,
-    companyId: req.companyId,
-    createdBy: req.user._id
-  });
-  res.status(201).json({ success: true, message: 'Transaction created', data: transaction });
+router.post('/transactions', hasPermission('cash.create'), async (req, res, next) => {
+  try {
+    const CashTransaction = require('../models/CashTransaction');
+    const LedgerAccount = require('../models/LedgerAccount');
+    const AccountGroup = require('../models/AccountGroup');
+
+    // Find or create default cash account for company
+    let cashAccount = req.body.cashAccount;
+    if (!cashAccount) {
+      const defaultCash = await LedgerAccount.findOne({
+        companyId: req.companyId,
+        isCashAccount: true,
+        isActive: true
+      }).select('_id');
+
+      if (defaultCash) {
+        cashAccount = defaultCash._id;
+      } else {
+        // Find or create Cash & Bank account group (code 1110)
+        let cashAccountGroup = await AccountGroup.findOne({
+          companyId: req.companyId,
+          code: '1110'
+        });
+
+        // If no account group exists, create basic structure
+        if (!cashAccountGroup) {
+          // Create the Cash & Bank account group
+          cashAccountGroup = await AccountGroup.create({
+            companyId: req.companyId,
+            code: '1110',
+            name: { en: 'Cash & Bank', ur: 'نقد اور بینک' },
+            type: 'asset',
+            category: 'current_asset',
+            normalBalance: 'debit',
+            isSystem: true,
+            level: 3,
+            createdBy: req.user._id
+          });
+        }
+
+        // Count existing cash accounts to generate unique code
+        const cashCount = await LedgerAccount.countDocuments({
+          companyId: req.companyId,
+          code: { $regex: '^1110' }
+        });
+        const code = `1110${String(cashCount + 1).padStart(3, '0')}`;
+
+        // Create default cash account with proper structure
+        const newCashAccount = await LedgerAccount.create({
+          companyId: req.companyId,
+          code: code,
+          name: { en: 'Cash in Hand', ur: 'نقد در دست' },
+          accountGroup: cashAccountGroup._id,
+          type: 'asset',
+          subType: 'cash',
+          entityType: 'cash_account',
+          isCashAccount: true,
+          isSystem: true,
+          openingBalance: { amount: 0, type: 'debit' },
+          currentBalance: { debit: 0, credit: 0, net: 0 },
+          createdBy: req.user._id
+        });
+        cashAccount = newCashAccount._id;
+      }
+    }
+
+    const transaction = await CashTransaction.create({
+      ...req.body,
+      companyId: req.companyId,
+      createdBy: req.user._id,
+      cashAccount,
+      status: 'confirmed'
+    });
+
+    res.status(201).json({ success: true, message: 'Transaction created', data: transaction });
+  } catch (error) {
+    next(error);
+  }
 });
+
+// ─── Unified Transaction API ──────────────────────────────────────────────────
+const unifiedController = require('../controllers/unifiedTransaction.controller');
+
+// GET /cash-register/unified - Get all transactions with type filter
+router.get('/unified', hasPermission('cash.view'), unifiedController.getTransactions);
+
+// GET /cash-register/unified/summary - Get daily summary
+router.get('/unified/summary', hasPermission('cash.view'), unifiedController.getDailySummary);
+
+// POST /cash-register/unified - Create unified transaction
+router.post('/unified', hasPermission('cash.create'), unifiedController.createTransaction);
+
+// GET /cash-register/unified/:id - Get single transaction
+router.get('/unified/:id', hasPermission('cash.view'), unifiedController.getTransactionById);
+
+// PUT /cash-register/unified/:id - Update transaction
+router.put('/unified/:id', hasPermission('cash.edit'), unifiedController.updateTransaction);
+
+// PATCH /cash-register/unified/:id/cancel - Cancel transaction
+router.patch('/unified/:id/cancel', hasPermission('cash.delete'), unifiedController.cancelTransaction);
+
+// POST /cash-register/unified/migrate - Fix existing transactions without type
+router.post('/unified/migrate', hasPermission('cash.admin'), unifiedController.migrateTransactions);
+
+// POST /cash-register/unified/cleanup - Delete all cash records for company
+router.post('/unified/cleanup', hasPermission('cash.admin'), unifiedController.cleanupCashRecords);
 
 module.exports = router;

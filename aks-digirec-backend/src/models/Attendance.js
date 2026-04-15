@@ -85,6 +85,27 @@ const attendanceSchema = new mongoose.Schema({
     type: String,
     enum: ['sick', 'casual', 'annual', 'unpaid', 'other']
   },
+  // Payment calculations
+  wageCalculation: {
+    hourlyRate: { type: Number, default: 0 },
+    overtimeRate: { type: Number, default: 0 },
+    dailyRate: { type: Number, default: 0 },
+    regularHours: { type: Number, default: 0 },
+    overtimeHours: { type: Number, default: 0 },
+    regularWages: { type: Number, default: 0 },
+    overtimeWages: { type: Number, default: 0 },
+    totalWages: { type: Number, default: 0 }
+  },
+  // Running balance and payments
+  balanceBF: { type: Number, default: 0 }, // Balance Brought Forward
+  advanceAmount: { type: Number, default: 0 }, // Daily advance taken
+  paidAmount: { type: Number, default: 0 }, // Amount paid to worker
+  balanceCF: { type: Number, default: 0 }, // Balance Carried Forward
+  paymentStatus: {
+    type: String,
+    enum: ['unpaid', 'partial', 'paid'],
+    default: 'unpaid'
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

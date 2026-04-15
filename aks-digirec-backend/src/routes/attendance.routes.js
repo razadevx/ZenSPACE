@@ -30,7 +30,13 @@ router.put('/:id', hasPermission('workers.edit'), attendanceController.updateAtt
 // Approve attendance
 router.put('/:id/approve', hasPermission('workers.edit'), attendanceController.approveAttendance);
 
+// Record payment/advance
+router.put('/:id/payment', hasPermission('workers.edit'), attendanceController.recordPayment);
+
 // Delete attendance
 router.delete('/:id', hasPermission('workers.delete'), attendanceController.deleteAttendance);
+
+// Recalculate wages for all attendance on a date (one-time fix)
+router.post('/recalculate-wages', hasPermission('workers.edit'), attendanceController.recalculateWages);
 
 module.exports = router;

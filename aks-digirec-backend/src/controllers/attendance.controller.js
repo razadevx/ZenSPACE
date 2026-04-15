@@ -4,6 +4,112 @@ const logger = require('../config/logger');
 const XLSX = require('xlsx');
 
 /**
+ * Calculate worker wages based on attendance and worker wage settings
+ */
+const calculateWorkerWages = (attendance, worker) => {
+  console.log('=== WAGE CALC START ===');
+  console.log('Worker:', worker?.firstName, worker?.lastName, 'Code:', worker?.code);
+  console.log('Worker wages object:', JSON.stringify(worker?.wages, null, 2));
+  console.log('Attendance hours:', attendance?.workingHours, 'OT:', attendance?.overtimeHours);
+
+  if (!attendance || !worker) {
+    console.log('ERROR: Missing attendance or worker');
+    return {
+      hourlyRate: 0, overtimeRate: 0, dailyRate: 0,
+      regularHours: 0, overtimeHours: 0,
+      regularWages: 0, overtimeWages: 0, totalWages: 0
+    };
+  }
+
+  // Handle case where wages is not set
+  if (!worker.wages || !worker.wages.type || !worker.wages.amount) {
+    console.log('ERROR: Worker has no wages configured - wages:', worker?.wages);
+    return {
+      hourlyRate: 0, overtimeRate: 0, dailyRate: 0,
+      regularHours: 0, overtimeHours: 0,
+      regularWages: 0, overtimeWages: 0, totalWages: 0
+    };
+  }
+
+  const wageType = worker.wages.type;
+  const baseAmount = worker.wages.amount || 0;
+  const workingHours = attendance.workingHours || 0;
+  const overtimeHours = attendance.overtimeHours || 0;
+
+  console.log('Wage type:', wageType, 'Base amount:', baseAmount);
+  console.log('Working hours:', workingHours, 'Overtime hours:', overtimeHours);
+
+  let hourlyRate = 0;
+  let overtimeRate = 0;
+  let dailyRate = 0;
+  let regularWages = 0;
+  let overtimeWages = 0;
+
+  if (wageType === 'hourly') {
+    hourlyRate = baseAmount;
+    overtimeRate = worker.wages.overtimeRate || (baseAmount * 1.5);
+    // Cap regular hours at 8, anything beyond is overtime
+    const regularHoursCalc = Math.min(workingHours, 8);
+    const overtimeHoursCalc = Math.max(0, workingHours - 8) + overtimeHours;
+    regularWages = regularHoursCalc * hourlyRate;
+    overtimeWages = overtimeHoursCalc * overtimeRate;
+  } else if (wageType === 'daily') {
+    dailyRate = baseAmount;
+    hourlyRate = baseAmount / 8; // Assuming 8-hour workday
+    overtimeRate = hourlyRate * 1.5;
+    // Pro-rata calculation based on hours worked (max 1 day worth)
+    const effectiveHours = Math.min(workingHours, 8);
+    const overtimeHoursCalc = Math.max(0, workingHours - 8) + overtimeHours;
+    regularWages = (effectiveHours / 8) * dailyRate; // Pro-rata wages
+    overtimeWages = overtimeHoursCalc * overtimeRate;
+  } else if (wageType === 'monthly') {
+    // Assume 26 working days per month, 8 hours per day
+    dailyRate = baseAmount / 26;
+    hourlyRate = dailyRate / 8;
+    overtimeRate = hourlyRate * 1.5;
+    // Pro-rata calculation based on hours worked (max 1 day worth)
+    const effectiveHours = Math.min(workingHours, 8);
+    const overtimeHoursCalc = Math.max(0, workingHours - 8) + overtimeHours;
+    regularWages = (effectiveHours / 8) * dailyRate; // Pro-rata daily wages
+    overtimeWages = overtimeHoursCalc * overtimeRate;
+  } else {
+    // piece_rate or default - use hourly equivalent if hours are tracked
+    hourlyRate = worker.wages.hourlyEquivalent || 0;
+    overtimeRate = hourlyRate * 1.5;
+    dailyRate = baseAmount;
+    if (hourlyRate > 0 && workingHours > 0) {
+      const regularHoursCalc = Math.min(workingHours, 8);
+      const overtimeHoursCalc = Math.max(0, workingHours - 8) + overtimeHours;
+      regularWages = regularHoursCalc * hourlyRate;
+      overtimeWages = overtimeHoursCalc * overtimeRate;
+    } else {
+      regularWages = 0;
+      overtimeWages = 0;
+    }
+  }
+
+  // Calculate regular hours (cap at 8 hours for standard work)
+  const regularHours = Math.min(workingHours, 8);
+
+  const result = {
+    hourlyRate: parseFloat(hourlyRate.toFixed(2)),
+    overtimeRate: parseFloat(overtimeRate.toFixed(2)),
+    dailyRate: parseFloat(dailyRate.toFixed(2)),
+    regularHours: parseFloat(regularHours.toFixed(2)),
+    overtimeHours: parseFloat(overtimeHours.toFixed(2)),
+    regularWages: parseFloat(regularWages.toFixed(2)),
+    overtimeWages: parseFloat(overtimeWages.toFixed(2)),
+    totalWages: parseFloat((regularWages + overtimeWages).toFixed(2))
+  };
+
+  console.log('=== WAGE CALC RESULT ===');
+  console.log('Result:', JSON.stringify(result, null, 2));
+  console.log('=== WAGE CALC END ===');
+
+  return result;
+};
+
+/**
  * Get attendance records for a specific date
  * GET /api/attendance?date=YYYY-MM-DD&sectionGroup=Clay Group
  */
@@ -73,12 +179,41 @@ exports.getAttendance = asyncHandler(async (req, res, next) => {
   const existingAttendance = await Attendance.find(attendanceQuery).lean();
   const attendanceMap = new Map(existingAttendance.map(a => [a.workerId.toString(), a]));
 
-  // Build results for all workers
-  const results = workers.map(worker => {
+  // Build results for all workers with payment calculations
+  const results = await Promise.all(workers.map(async (worker) => {
     const attendance = attendanceMap.get(worker._id.toString());
     const fallbackSectionGroup = worker.department?.sectionGroup || null;
     const finalSectionGroup = attendance?.sectionGroup || fallbackSectionGroup;
-    
+
+    // Calculate wages based on attendance and worker settings
+    let wageCalc = attendance ? calculateWorkerWages(attendance, worker) : {
+      hourlyRate: 0, overtimeRate: 0, dailyRate: 0,
+      regularHours: 0, overtimeHours: 0,
+      regularWages: 0, overtimeWages: 0, totalWages: 0
+    };
+
+      // Log for debugging
+    console.log(`Worker ${worker.code}: hours=${attendance?.workingHours}, wages=${worker.wages?.type}:${worker.wages?.amount}, calc=${wageCalc.totalWages}`);
+
+    // Get worker's current balance (Balance B/F is the balance before today)
+    // For simplicity, we'll use the worker's currentBalance as Balance B/F
+    const balanceBF = worker.currentBalance || 0;
+
+    // Worked amount is the total wages earned today
+    const workedAmount = wageCalc.totalWages;
+
+    // Get advance amount from attendance record or default to 0
+    const advanceAmount = attendance?.advanceAmount || 0;
+
+    // Amount to pay is worked amount minus advance
+    const amountToPay = Math.max(0, workedAmount - advanceAmount);
+
+    // Paid amount (defaults to 0 unless recorded)
+    const paidAmount = attendance?.paidAmount || 0;
+
+    // Balance C/F = Balance B/F + Worked Amount - Paid Amount
+    const balanceCF = balanceBF + workedAmount - paidAmount;
+
     return {
       _id: attendance?._id || null,
       workerId: worker._id,
@@ -96,9 +231,21 @@ exports.getAttendance = asyncHandler(async (req, res, next) => {
       leaveType: attendance?.leaveType || null,
       isApproved: attendance?.isApproved || false,
       sectionGroup: finalSectionGroup,
-      hasAttendance: !!attendance
+      hasAttendance: !!attendance,
+      // Payment fields
+      balanceBF: balanceBF,
+      workedAmount: workedAmount,
+      advanceAmount: advanceAmount,
+      amountToPay: amountToPay,
+      paidAmount: paidAmount,
+      balanceCF: balanceCF,
+      paymentStatus: attendance?.paymentStatus || 'unpaid',
+      wageCalculation: wageCalc,
+      // Include worker wage info for reference
+      workerWageType: worker.wages?.type || 'daily',
+      workerWageAmount: worker.wages?.amount || 0
     };
-  });
+  }));
 
   // Calculate summary
   const summary = {
@@ -109,7 +256,13 @@ exports.getAttendance = asyncHandler(async (req, res, next) => {
     halfDay: results.filter(r => r.status === 'half_day').length,
     holiday: results.filter(r => r.status === 'holiday').length,
     totalWorkingHours: results.reduce((sum, r) => sum + r.workingHours, 0),
-    totalOvertimeHours: results.reduce((sum, r) => sum + r.overtimeHours, 0)
+    totalOvertimeHours: results.reduce((sum, r) => sum + r.overtimeHours, 0),
+    // Payment summaries
+    totalWorkedAmount: results.reduce((sum, r) => sum + r.workedAmount, 0),
+    totalAdvanceAmount: results.reduce((sum, r) => sum + r.advanceAmount, 0),
+    totalPaidAmount: results.reduce((sum, r) => sum + r.paidAmount, 0),
+    totalAmountToPay: results.reduce((sum, r) => sum + r.amountToPay, 0),
+    totalBalanceCF: results.reduce((sum, r) => sum + r.balanceCF, 0)
   };
 
   res.status(200).json({ success: true, data: results, summary });
@@ -170,7 +323,12 @@ exports.markAttendance = asyncHandler(async (req, res, next) => {
     // Update existing attendance
     Object.assign(attendance, attendanceData);
     await attendance.save();
-    
+
+    // Calculate wages based on worker settings
+    const wageCalc = calculateWorkerWages(attendance, worker);
+    attendance.wageCalculation = wageCalc;
+    await attendance.save();
+
     logger.info(`Attendance updated for worker ${workerId} on ${date}`);
     res.status(200).json({ success: true, message: 'Attendance updated', data: attendance });
   } else {
@@ -179,7 +337,13 @@ exports.markAttendance = asyncHandler(async (req, res, next) => {
       ...attendanceData,
       createdBy: req.user._id
     });
-    
+
+    // Calculate wages based on worker settings
+    const wageCalc = calculateWorkerWages(attendance, worker);
+    attendance.wageCalculation = wageCalc;
+    attendance.balanceBF = worker.currentBalance || 0;
+    await attendance.save();
+
     logger.info(`Attendance marked for worker ${workerId} on ${date}`);
     res.status(201).json({ success: true, message: 'Attendance marked', data: attendance });
   }
@@ -338,6 +502,59 @@ exports.deleteAttendance = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * Record advance or payment for a worker's attendance
+ * PUT /api/attendance/:id/payment
+ */
+exports.recordPayment = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const { advanceAmount, paidAmount } = req.body;
+  const companyId = req.companyId;
+
+  const attendance = await Attendance.findOne({ _id: id, companyId });
+
+  if (!attendance) {
+    return next(new AppError('Attendance record not found', 404));
+  }
+
+  // Update payment fields
+  if (advanceAmount !== undefined) {
+    attendance.advanceAmount = Math.max(0, advanceAmount);
+  }
+  if (paidAmount !== undefined) {
+    attendance.paidAmount = Math.max(0, paidAmount);
+  }
+
+  // Get worker to calculate balance CF
+  const worker = await Worker.findById(attendance.workerId);
+  const balanceBF = worker?.currentBalance || 0;
+  const workedAmount = attendance.wageCalculation?.totalWages || 0;
+
+  // Recalculate balance CF
+  attendance.balanceBF = balanceBF;
+  attendance.balanceCF = balanceBF + workedAmount - attendance.paidAmount;
+
+  // Determine payment status
+  if (attendance.paidAmount >= workedAmount) {
+    attendance.paymentStatus = 'paid';
+  } else if (attendance.paidAmount > 0) {
+    attendance.paymentStatus = 'partial';
+  } else {
+    attendance.paymentStatus = 'unpaid';
+  }
+
+  attendance.updatedBy = req.user._id;
+  await attendance.save();
+
+  logger.info(`Payment recorded for attendance ${id}: advance=${attendance.advanceAmount}, paid=${attendance.paidAmount}`);
+
+  res.status(200).json({
+    success: true,
+    message: 'Payment recorded successfully',
+    data: attendance
+  });
+});
+
+/**
  * Get attendance report for a date range
  * GET /api/attendance/report?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&workerId=...
  */
@@ -413,7 +630,7 @@ exports.exportAttendance = asyncHandler(async (req, res, next) => {
     .sort({ 'workerId.firstName': 1 })
     .lean();
 
-  // Prepare data for Excel
+  // Prepare data for Excel with payment information
   const data = attendances.map(att => ({
     'Worker Code': att.workerId?.code || '',
     'Worker Name': att.workerId ? `${att.workerId.firstName} ${att.workerId.lastName}` : '',
@@ -425,6 +642,20 @@ exports.exportAttendance = asyncHandler(async (req, res, next) => {
     'Overtime Hours': att.overtimeHours || 0,
     'Late Minutes': att.lateMinutes || 0,
     'Early Departure': att.earlyDepartureMinutes || 0,
+    // Wage calculation
+    'Hourly Rate': att.wageCalculation?.hourlyRate || 0,
+    'Overtime Rate': att.wageCalculation?.overtimeRate || 0,
+    'Regular Hours': att.wageCalculation?.regularHours || 0,
+    'Regular Wages': att.wageCalculation?.regularWages || 0,
+    'Overtime Wages': att.wageCalculation?.overtimeWages || 0,
+    'Total Wages (Worked Amount)': att.wageCalculation?.totalWages || 0,
+    // Payment information
+    'Balance B/F': att.balanceBF || 0,
+    'Advance Amount': att.advanceAmount || 0,
+    'Amount to Pay': (att.wageCalculation?.totalWages || 0) - (att.advanceAmount || 0),
+    'Paid Amount': att.paidAmount || 0,
+    'Balance C/F': att.balanceCF || 0,
+    'Payment Status': att.paymentStatus || 'unpaid',
     'Leave Type': att.leaveType || '',
     'Notes': att.notes || '',
     'Section Group': att.sectionGroup || '',
@@ -500,5 +731,65 @@ exports.getMonthlySummary = asyncHandler(async (req, res, next) => {
     data: Object.values(workerSummary),
     month: parseInt(month),
     year: parseInt(year)
+  });
+});
+
+/**
+ * Recalculate wages for all attendance on a specific date
+ * POST /api/attendance/recalculate-wages?date=YYYY-MM-DD
+ */
+exports.recalculateWages = asyncHandler(async (req, res, next) => {
+  const { date } = req.query;
+  const companyId = req.companyId;
+
+  if (!date) {
+    return next(new AppError('Date is required', 400));
+  }
+
+  const queryDate = new Date(date);
+  const startOfDay = new Date(queryDate.getFullYear(), queryDate.getMonth(), queryDate.getDate(), 0, 0, 0, 0);
+  const endOfDay = new Date(queryDate.getFullYear(), queryDate.getMonth(), queryDate.getDate(), 23, 59, 59, 999);
+
+  // Get all attendance for this date
+  const attendances = await Attendance.find({
+    companyId,
+    date: { $gte: startOfDay, $lte: endOfDay }
+  }).populate('workerId', 'firstName lastName code wages currentBalance');
+
+  let updatedCount = 0;
+  let failedCount = 0;
+
+  for (const att of attendances) {
+    try {
+      const worker = att.workerId;
+      if (!worker || !worker.wages || !worker.wages.type || !worker.wages.amount) {
+        console.log(`Skipping ${att._id}: Worker has no wages configured`);
+        failedCount++;
+        continue;
+      }
+
+      // Recalculate wages
+      const wageCalc = calculateWorkerWages(att, worker);
+
+      // Update the record
+      att.wageCalculation = wageCalc;
+      att.balanceBF = worker.currentBalance || 0;
+      att.balanceCF = (worker.currentBalance || 0) + wageCalc.totalWages - (att.paidAmount || 0);
+
+      await att.save();
+      updatedCount++;
+      console.log(`Updated ${worker.code}: hours=${att.workingHours}, wageType=${worker.wages.type}, workedAmount=${wageCalc.totalWages}`);
+    } catch (err) {
+      console.error(`Failed to update attendance ${att._id}:`, err.message);
+      failedCount++;
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    message: `Wages recalculated for ${updatedCount} records, ${failedCount} failed`,
+    updated: updatedCount,
+    failed: failedCount,
+    date: date
   });
 });

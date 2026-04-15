@@ -7,11 +7,11 @@ const cashTransactionSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  // Transaction number
+  // Transaction number (auto-generated in pre-save)
   transactionNumber: {
     type: String,
-    required: true,
-    unique: true
+    unique: true,
+    sparse: true
   },
   // Transaction date
   transactionDate: {
@@ -19,11 +19,17 @@ const cashTransactionSchema = new mongoose.Schema({
     required: true,
     default: Date.now
   },
-  // Transaction type
+  // Transaction type (unified enum for all transaction types)
   type: {
     type: String,
     required: true,
-    enum: ['receipt', 'payment', 'expense', 'income', 'transfer_in', 'transfer_out', 'adjustment'],
+    enum: ['SALE', 'PURCHASE', 'SALES_RETURN', 'PURCHASE_RETURN', 'EXPENSE', 'INCOME', 'RECEIPT', 'PAYMENT', 'TRANSFER_IN', 'TRANSFER_OUT', 'ADJUSTMENT'],
+    index: true
+  },
+  // Transaction direction (calculated based on type)
+  direction: {
+    type: String,
+    enum: ['in', 'out'],
     index: true
   },
   // Category
@@ -39,7 +45,25 @@ const cashTransactionSchema = new mongoose.Schema({
       'other_income', 'other_expense', 'adjustment'
     ]
   },
-  // Party (customer, supplier, worker)
+  // Party information
+  partyType: {
+    type: String,
+    enum: ['customer', 'supplier', 'worker', 'other', null],
+    index: true
+  },
+  partyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    refPath: 'partyModel',
+    index: true
+  },
+  partyModel: {
+    type: String,
+    enum: ['Customer', 'Supplier', 'Worker', null]
+  },
+  partyName: {
+    type: String
+  },
+  // Legacy party object (for backward compatibility)
   party: {
     type: { type: String, enum: ['customer', 'supplier', 'worker', 'other'] },
     id: mongoose.Schema.Types.ObjectId,
@@ -58,8 +82,7 @@ const cashTransactionSchema = new mongoose.Schema({
   // Cash account
   cashAccount: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'LedgerAccount',
-    required: true
+    ref: 'LedgerAccount'
   },
   // Reference document
   reference: {
@@ -74,11 +97,16 @@ const cashTransactionSchema = new mongoose.Schema({
   description: String,
   // Notes
   notes: String,
-  // Status
-  status: {
+  // Payment mode
+  paymentMode: {
     type: String,
-    enum: ['draft', 'confirmed', 'cancelled'],
-    default: 'draft'
+    enum: ['CASH', 'BANK', 'ONLINE', 'CREDIT'],
+    default: 'CASH'
+  },
+  // Document number (auto-generated)
+  documentNo: {
+    type: String,
+    index: true
   },
   // Ledger transaction
   ledgerTransactionId: {
@@ -103,18 +131,53 @@ const cashTransactionSchema = new mongoose.Schema({
 });
 
 // Indexes
-cashTransactionSchema.index({ companyId: 1, transactionNumber: 1 }, { unique: true });
+cashTransactionSchema.index({ companyId: 1, documentNo: 1 }, { unique: true, sparse: true });
+cashTransactionSchema.index({ companyId: 1, transactionNumber: 1 }, { unique: true, sparse: true });
 cashTransactionSchema.index({ companyId: 1, transactionDate: -1 });
 cashTransactionSchema.index({ companyId: 1, type: 1 });
-cashTransactionSchema.index({ companyId: 1, category: 1 });
+cashTransactionSchema.index({ companyId: 1, partyType: 1 });
 cashTransactionSchema.index({ companyId: 1, status: 1 });
 
-// Pre-save middleware to generate transaction number
+// Pre-save middleware to generate document number, set direction, and configure party model
 cashTransactionSchema.pre('save', function(next) {
-  if (this.isNew && !this.transactionNumber) {
-    const prefix = this.type === 'receipt' ? 'CR' : this.type === 'payment' ? 'CP' : 'CT';
-    const timestamp = Date.now().toString(36).toUpperCase();
-    this.transactionNumber = `${prefix}${timestamp}`;
+  if (this.isNew) {
+    // Generate document number if not provided
+    if (!this.documentNo) {
+      const prefix = this.type;
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+      this.documentNo = `${prefix}-${timestamp}${random}`;
+    }
+
+    // Generate legacy transactionNumber if not provided
+    if (!this.transactionNumber) {
+      const prefix = this.type === 'RECEIPT' ? 'CR' : this.type === 'PAYMENT' ? 'CP' : 'CT';
+      const timestamp = Date.now().toString(36).toUpperCase();
+      this.transactionNumber = `${prefix}${timestamp}`;
+    }
+
+    // Set direction based on transaction type
+    const cashInTypes = ['SALE', 'PURCHASE_RETURN', 'RECEIPT', 'INCOME', 'TRANSFER_IN'];
+    const cashOutTypes = ['PURCHASE', 'SALES_RETURN', 'EXPENSE', 'PAYMENT', 'TRANSFER_OUT'];
+
+    if (cashInTypes.includes(this.type)) {
+      this.direction = 'in';
+    } else if (cashOutTypes.includes(this.type)) {
+      this.direction = 'out';
+    }
+
+    // Set partyModel based on partyType for proper refPath resolution
+    if (this.partyId && this.partyType) {
+      const modelMap = {
+        'customer': 'Customer',
+        'supplier': 'Supplier',
+        'worker': 'Worker'
+      };
+      this.partyModel = modelMap[this.partyType] || null;
+    } else {
+      this.partyModel = null;
+      this.partyId = null; // Ensure partyId is null if not valid
+    }
   }
   next();
 });

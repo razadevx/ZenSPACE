@@ -137,6 +137,12 @@ export interface Worker {
   referredBy?: string;
   status: 'active' | 'inactive';
   notes?: string;
+  wages?: {
+    type: 'hourly' | 'daily' | 'monthly' | 'piece_rate';
+    amount: number;
+    overtimeRate?: number;
+    currency?: string;
+  };
   createdBy: string;
   updatedBy: string;
   createdAt: Date;

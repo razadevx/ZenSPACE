@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { 
+import {
   Calendar, Users, CheckCircle, XCircle,
   ChevronLeft, ChevronRight, Lock, Loader2,
-  Clock, FileSpreadsheet, UserCheck, UserX, Sun, Umbrella
+  Clock, FileSpreadsheet, UserCheck, UserX, Sun, Umbrella,
+  DollarSign, Wallet, CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { useUIStore } from '@/stores';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { workersApi, type SectionGroup } from '@/api/services';
-import { attendanceApi, type AttendanceRecord, type AttendanceSummary } from '@/api/services';
+import { attendanceApi, type AttendanceRecord, type AttendanceSummary, type MarkAttendancePayload } from '@/api/services';
 import { toast } from 'sonner';
 import gsap from 'gsap';
 
@@ -60,13 +61,13 @@ export function WorkersActivityPage() {
     notes: '',
   });
 
-  // These variables are used for future payment integration
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const totalWorked = activities.reduce((sum, w) => sum + w.workedAmount, 0);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const totalPaid = activities.reduce((sum, w) => sum + w.paid, 0);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const totalAdvance = activities.reduce((sum, w) => sum + w.advanceDaily, 0);
+  // Payment dialog state
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [selectedWorkerForPayment, setSelectedWorkerForPayment] = useState<AttendanceRecord | null>(null);
+  const [paymentFormData, setPaymentFormData] = useState({
+    advanceAmount: '',
+    paidAmount: '',
+  });
 
   useEffect(() => {
     setPageTitle(t('navigation.workersActivity'));
@@ -157,6 +158,12 @@ export function WorkersActivityPage() {
         holiday: allData.filter(w => w.status === 'holiday').length,
         totalWorkingHours: allData.reduce((sum, w) => sum + (w.workingHours || 0), 0),
         totalOvertimeHours: allData.reduce((sum, w) => sum + (w.overtimeHours || 0), 0),
+        // Payment summaries
+        totalWorkedAmount: allData.reduce((sum, w) => sum + (w.workedAmount || 0), 0),
+        totalAdvanceAmount: allData.reduce((sum, w) => sum + (w.advanceAmount || 0), 0),
+        totalPaidAmount: allData.reduce((sum, w) => sum + (w.paidAmount || 0), 0),
+        totalAmountToPay: allData.reduce((sum, w) => sum + (w.amountToPay || 0), 0),
+        totalBalanceCF: allData.reduce((sum, w) => sum + (w.balanceCF || 0), 0)
       };
 
       setAllGroupsAttendance(allData);
@@ -256,6 +263,9 @@ export function WorkersActivityPage() {
 
   // Handle Check In
   const handleCheckIn = async (worker: AttendanceRecord) => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
     try {
       const dateStr = selectedDate.toISOString().slice(0, 10);
       const checkInTime = new Date(selectedDate);
@@ -283,14 +293,21 @@ export function WorkersActivityPage() {
       }
 
       toast.success('Checked in successfully');
-      loadAttendance();
+      await loadAttendance();
     } catch (error: any) {
       toast.error('Failed to check in: ' + (error.response?.data?.message || error.message));
+    } finally {
+      requestAnimationFrame(() => {
+        window.scrollTo({ left: scrollX, top: scrollY, behavior: 'auto' });
+      });
     }
   };
 
   // Handle Check Out
   const handleCheckOut = async (worker: AttendanceRecord) => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
     try {
       if (!worker.checkIn) {
         toast.error('Cannot check out before check in');
@@ -318,9 +335,13 @@ export function WorkersActivityPage() {
       }
 
       toast.success('Checked out successfully');
-      loadAttendance();
+      await loadAttendance();
     } catch (error: any) {
       toast.error('Failed to check out: ' + (error.response?.data?.message || error.message));
+    } finally {
+      requestAnimationFrame(() => {
+        window.scrollTo({ left: scrollX, top: scrollY, behavior: 'auto' });
+      });
     }
   };
 
@@ -358,7 +379,7 @@ export function WorkersActivityPage() {
     try {
       setIsExporting(true);
       const dateStr = selectedDate.toISOString().slice(0, 10);
-      const blob = await attendanceApi.exportAttendance(dateStr, activeSection);
+      const blob = await attendanceApi.exportAttendance(dateStr, activeSection === 'all' ? undefined : activeSection);
       
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -429,7 +450,7 @@ export function WorkersActivityPage() {
   // Save edited attendance
   const handleSaveEdit = async () => {
     if (!editingWorker) return;
-    
+
     try {
       const dateStr = selectedDate.toISOString().slice(0, 10);
       const checkInDate = new Date(`${dateStr}T${editFormData.checkIn}:00`);
@@ -463,6 +484,41 @@ export function WorkersActivityPage() {
       loadAttendance();
     } catch (error: any) {
       toast.error('Failed to update attendance: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  // Open payment dialog
+  const openPaymentDialog = (worker: AttendanceRecord) => {
+    if (!worker._id) {
+      toast.error('Cannot record payment for worker without attendance record');
+      return;
+    }
+    setSelectedWorkerForPayment(worker);
+    setPaymentFormData({
+      advanceAmount: String(worker.advanceAmount || 0),
+      paidAmount: String(worker.paidAmount || 0),
+    });
+    setPaymentDialogOpen(true);
+  };
+
+  // Handle payment save
+  const handleSavePayment = async () => {
+    if (!selectedWorkerForPayment || !selectedWorkerForPayment._id) return;
+
+    try {
+      const advanceAmount = parseFloat(paymentFormData.advanceAmount) || 0;
+      const paidAmount = parseFloat(paymentFormData.paidAmount) || 0;
+
+      await attendanceApi.recordPayment(selectedWorkerForPayment._id, {
+        advanceAmount,
+        paidAmount,
+      });
+
+      toast.success('Payment recorded successfully');
+      setPaymentDialogOpen(false);
+      loadAttendance();
+    } catch (error: any) {
+      toast.error('Failed to record payment: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -679,12 +735,13 @@ export function WorkersActivityPage() {
                             <th className="text-right p-3 font-medium">Amount to Pay</th>
                             <th className="text-right p-3 font-medium">Paid</th>
                             <th className="text-right p-3 font-medium">Balance C/F</th>
+                            <th className="text-center p-3 font-medium">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {attendanceLoading ? (
                             <tr>
-                              <td colSpan={10} className="p-4 text-center">
+                              <td colSpan={11} className="p-4 text-center">
                                 <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                               </td>
                             </tr>
@@ -804,11 +861,48 @@ export function WorkersActivityPage() {
                                     )}
                                   </td>
                                   <td className="p-3 text-right">{formatCurrency(worker.balanceBF || 0)}</td>
-                                  <td className="p-3 text-right">{formatCurrency(0)}</td>
-                                  <td className="p-3 text-right">{formatCurrency(0)}</td>
-                                  <td className="p-3 text-right font-semibold">{formatCurrency(0)}</td>
-                                  <td className="p-3 text-right">{formatCurrency(0)}</td>
-                                  <td className="p-3 text-right">{formatCurrency(worker.balanceBF || 0)}</td>
+                                  <td className="p-3 text-right">
+                                    {worker.workedAmount > 0 ? (
+                                      <div className="text-sm">
+                                        <div className="font-medium text-green-600">{formatCurrency(worker.workedAmount)}</div>
+                                        {worker.wageCalculation?.overtimeWages > 0 && (
+                                          <div className="text-xs text-orange-500">+{formatCurrency(worker.wageCalculation.overtimeWages)} OT</div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      formatCurrency(0)
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    {worker.advanceAmount > 0 ? (
+                                      <span className="text-amber-600">{formatCurrency(worker.advanceAmount)}</span>
+                                    ) : (
+                                      formatCurrency(0)
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right font-semibold text-blue-600">
+                                    {formatCurrency(worker.amountToPay || 0)}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    {worker.paidAmount > 0 ? (
+                                      <span className="text-green-600">{formatCurrency(worker.paidAmount)}</span>
+                                    ) : (
+                                      formatCurrency(0)
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right font-medium">{formatCurrency(worker.balanceCF || 0)}</td>
+                                  <td className="p-3 text-center">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                                      onClick={() => openPaymentDialog(worker)}
+                                      disabled={isDayClosed || worker.isApproved || !worker._id}
+                                      title="Record Payment/Advance"
+                                    >
+                                      <DollarSign className="h-4 w-4" />
+                                    </Button>
+                                  </td>
                                 </tr>
                               );
                             })
@@ -859,12 +953,13 @@ export function WorkersActivityPage() {
                     <th className="text-right p-3 font-medium">Amount to Pay</th>
                     <th className="text-right p-3 font-medium">Paid</th>
                     <th className="text-right p-3 font-medium">Balance C/F</th>
+                    <th className="text-center p-3 font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {attendanceLoading ? (
                     <tr>
-                      <td colSpan={11} className="p-4 text-center">
+                      <td colSpan={13} className="p-4 text-center">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                       </td>
                     </tr>
@@ -989,11 +1084,48 @@ export function WorkersActivityPage() {
                             )}
                           </td>
                           <td className="p-3 text-right">{formatCurrency(worker.balanceBF || 0)}</td>
-                          <td className="p-3 text-right">{formatCurrency(0)}</td>
-                          <td className="p-3 text-right">{formatCurrency(0)}</td>
-                          <td className="p-3 text-right font-semibold">{formatCurrency(0)}</td>
-                          <td className="p-3 text-right">{formatCurrency(0)}</td>
-                          <td className="p-3 text-right">{formatCurrency(worker.balanceBF || 0)}</td>
+                          <td className="p-3 text-right">
+                            {worker.workedAmount > 0 ? (
+                              <div className="text-sm">
+                                <div className="font-medium text-green-600">{formatCurrency(worker.workedAmount)}</div>
+                                {worker.wageCalculation?.overtimeWages > 0 && (
+                                  <div className="text-xs text-orange-500">+{formatCurrency(worker.wageCalculation.overtimeWages)} OT</div>
+                                )}
+                              </div>
+                            ) : (
+                              formatCurrency(0)
+                            )}
+                          </td>
+                          <td className="p-3 text-right">
+                            {worker.advanceAmount > 0 ? (
+                              <span className="text-amber-600">{formatCurrency(worker.advanceAmount)}</span>
+                            ) : (
+                              formatCurrency(0)
+                            )}
+                          </td>
+                          <td className="p-3 text-right font-semibold text-blue-600">
+                            {formatCurrency(worker.amountToPay || 0)}
+                          </td>
+                          <td className="p-3 text-right">
+                            {worker.paidAmount > 0 ? (
+                              <span className="text-green-600">{formatCurrency(worker.paidAmount)}</span>
+                            ) : (
+                              formatCurrency(0)
+                            )}
+                          </td>
+                          <td className="p-3 text-right font-medium">{formatCurrency(worker.balanceCF || 0)}</td>
+                          <td className="p-3 text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                              onClick={() => openPaymentDialog(worker)}
+                              disabled={isDayClosed || worker.isApproved || !worker._id}
+                              title="Record Payment/Advance"
+                            >
+                              <DollarSign className="h-4 w-4" />
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })
@@ -1007,6 +1139,78 @@ export function WorkersActivityPage() {
     </TabsContent>
   </Tabs>
 )}
+
+{/* Payment Summary Cards */}
+{activeSection === 'all' && allGroupsSummary && (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Total Worked</p>
+            <p className="text-xl font-bold text-green-600">{formatCurrency(allGroupsSummary.totalWorkedAmount)}</p>
+          </div>
+          <div className="p-3 bg-green-100 rounded-lg">
+            <DollarSign className="h-5 w-5 text-green-600" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Total Advances</p>
+            <p className="text-xl font-bold text-amber-600">{formatCurrency(allGroupsSummary.totalAdvanceAmount)}</p>
+          </div>
+          <div className="p-3 bg-amber-100 rounded-lg">
+            <Wallet className="h-5 w-5 text-amber-600" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Amount to Pay</p>
+            <p className="text-xl font-bold text-blue-600">{formatCurrency(allGroupsSummary.totalAmountToPay)}</p>
+          </div>
+          <div className="p-3 bg-blue-100 rounded-lg">
+            <CreditCard className="h-5 w-5 text-blue-600" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Total Paid</p>
+            <p className="text-xl font-bold text-purple-600">{formatCurrency(allGroupsSummary.totalPaidAmount)}</p>
+          </div>
+          <div className="p-3 bg-purple-100 rounded-lg">
+            <CheckCircle className="h-5 w-5 text-purple-600" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Balance C/F</p>
+            <p className="text-xl font-bold text-gray-700">{formatCurrency(allGroupsSummary.totalBalanceCF)}</p>
+          </div>
+          <div className="p-3 bg-gray-100 rounded-lg">
+            <Wallet className="h-5 w-5 text-gray-600" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+)}
+
 {/* Edit Attendance Dialog */}
 <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
   <DialogContent>
@@ -1048,6 +1252,71 @@ export function WorkersActivityPage() {
       </Button>
       <Button onClick={handleSaveEdit}>
         Save Changes
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+{/* Payment Dialog */}
+<Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <Wallet className="h-5 w-5" />
+        Record Payment - {selectedWorkerForPayment?.workerName}
+      </DialogTitle>
+    </DialogHeader>
+    <div className="space-y-4 py-4">
+      {selectedWorkerForPayment && (
+        <div className="bg-muted p-3 rounded-lg space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Worked Amount:</span>
+            <span className="font-medium text-green-600">{formatCurrency(selectedWorkerForPayment.workedAmount || 0)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Balance B/F:</span>
+            <span className="font-medium">{formatCurrency(selectedWorkerForPayment.balanceBF || 0)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Amount to Pay:</span>
+            <span className="font-medium text-blue-600">{formatCurrency(selectedWorkerForPayment.amountToPay || 0)}</span>
+          </div>
+        </div>
+      )}
+      <div className="space-y-2">
+        <Label htmlFor="advanceAmount">Advance Amount (PKR)</Label>
+        <Input
+          id="advanceAmount"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+          value={paymentFormData.advanceAmount}
+          onChange={(e) => setPaymentFormData({ ...paymentFormData, advanceAmount: e.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">Daily advance given to worker</p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="paidAmount">Paid Amount (PKR)</Label>
+        <Input
+          id="paidAmount"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+          value={paymentFormData.paidAmount}
+          onChange={(e) => setPaymentFormData({ ...paymentFormData, paidAmount: e.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">Amount paid to worker today</p>
+      </div>
+    </div>
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>
+        Cancel
+      </Button>
+      <Button onClick={handleSavePayment}>
+        <DollarSign className="h-4 w-4 mr-2" />
+        Record Payment
       </Button>
     </DialogFooter>
   </DialogContent>

@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { 
+import {
   TrendingUp, Wallet, Landmark, Package, Boxes, Users,
-  AlertTriangle, AlertCircle, CheckCircle, Info
+  AlertTriangle, AlertCircle, CheckCircle, Info,
+  DollarSign, Clock
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthStore, useUIStore } from '@/stores';
 import { cn, formatCurrency } from '@/lib/utils';
-import { rawMaterialApi, finishedGoodApi, workerApi, customerApi } from '@/api/services';
+import { rawMaterialApi, finishedGoodApi, workerApi, customerApi, attendanceApi } from '@/api/services';
 import gsap from 'gsap';
 import { toast } from 'sonner';
 
@@ -71,6 +72,11 @@ export function DashboardPage() {
     workersCount: 0,
     lowStockCount: 0,
     creditLimitWarnings: 0,
+    // Worker payment metrics
+    workersPresentToday: 0,
+    totalWorkedAmountToday: 0,
+    totalAmountToPayToday: 0,
+    totalPaidToday: 0,
   });
   
   const [activities, setActivities] = useState<any[]>([]);
@@ -90,11 +96,13 @@ export function DashboardPage() {
     const fetchDashboardData = async () => {
       try {
         // Fetch all data in parallel
-        const [materials, products, workers, customers] = await Promise.all([
+        const today = new Date().toISOString().slice(0, 10);
+        const [materials, products, workers, customers, attendance] = await Promise.all([
           rawMaterialApi.getAll(),
           finishedGoodApi.getAll(),
           workerApi.getAll(),
           customerApi.getAll(),
+          attendanceApi.getAttendance(today).catch(() => ({ data: [], summary: null })),
         ]);
         
         // Calculate low stock items
@@ -104,12 +112,21 @@ export function DashboardPage() {
         // Calculate credit limit warnings
         const creditWarnings = customers.filter(c => c.currentBalance >= c.creditLimit * 0.8);
         
+        // Calculate attendance metrics
+        const attendanceSummary = attendance.summary;
+        const attendanceData = attendance.data;
+
         setMetrics(prev => ({
           ...prev,
           finishedGoodsCount: products.length,
           workersCount: workers.length,
           lowStockCount: lowStockMaterials.length + lowStockProducts.length,
           creditLimitWarnings: creditWarnings.length,
+          // Worker payment metrics
+          workersPresentToday: attendanceSummary?.present || 0,
+          totalWorkedAmountToday: attendanceSummary?.totalWorkedAmount || 0,
+          totalAmountToPayToday: attendanceSummary?.totalAmountToPay || 0,
+          totalPaidToday: attendanceSummary?.totalPaidAmount || 0,
         }));
         
         // Add alerts for low stock
@@ -138,6 +155,8 @@ export function DashboardPage() {
           { id: '2', action: `${materials.length} materials in stock`, user: 'System', time: 'Just now', module: 'Inventory' },
           { id: '3', action: `${products.length} products available`, user: 'System', time: 'Just now', module: 'Products' },
           { id: '4', action: `${workers.length} workers registered`, user: 'System', time: 'Just now', module: 'Workers' },
+          { id: '5', action: `${attendanceSummary?.present || 0} workers present today`, user: 'System', time: 'Just now', module: 'Attendance' },
+          { id: '6', action: `${formatCurrency(attendanceSummary?.totalWorkedAmount || 0)} total wages today`, user: 'System', time: 'Just now', module: 'Payroll' },
         ];
         setActivities(recentActivities);
         
@@ -233,6 +252,26 @@ export function DashboardPage() {
           value={metrics.creditLimitWarnings}
           icon={AlertCircle}
           color={metrics.creditLimitWarnings > 0 ? 'bg-yellow-500' : 'bg-green-500'}
+        />
+        <MetricCard
+          title="Workers Present Today"
+          value={metrics.workersPresentToday}
+          icon={Clock}
+          subtitle={`Out of ${metrics.workersCount} total workers`}
+          color="bg-indigo-500"
+        />
+        <MetricCard
+          title="Today's Worker Wages"
+          value={formatCurrency(metrics.totalWorkedAmountToday)}
+          icon={DollarSign}
+          subtitle={`To Pay: ${formatCurrency(metrics.totalAmountToPayToday)}`}
+          color="bg-emerald-500"
+        />
+        <MetricCard
+          title="Today's Paid to Workers"
+          value={formatCurrency(metrics.totalPaidToday)}
+          icon={Wallet}
+          color={metrics.totalPaidToday >= metrics.totalAmountToPayToday ? 'bg-green-500' : 'bg-orange-500'}
         />
       </div>
       

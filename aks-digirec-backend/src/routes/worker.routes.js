@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { body, query } = require('express-validator');
 const workerController = require('../controllers/worker.controller');
 const { protect, companyIsolation, hasPermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validator');
@@ -16,14 +17,14 @@ router.get('/activities', hasPermission('workers.view'), workerController.getWor
 // Create worker activity with validation
 router.post('/activities', 
   hasPermission('workers.create'),
-  validate({
-    workerId: 'required|string',
-    date: 'required|date',
-    activityType: 'required|in:production,maintenance,cleaning,training,overtime,idle,other',
-    timeTracking: 'object',
-    production: 'object',
-    workDetails: 'object'
-  }),
+  validate([
+    body('workerId').notEmpty().isString().withMessage('workerId is required and must be a string'),
+    body('date').isISO8601().toDate().withMessage('date is required and must be a valid date'),
+    body('activityType').notEmpty().isIn(['production','maintenance','cleaning','training','overtime','idle','other']).withMessage('activityType is required and must be one of: production, maintenance, cleaning, training, overtime, idle, other'),
+    body('timeTracking').optional().isObject().withMessage('timeTracking must be an object'),
+    body('production').optional().isObject().withMessage('production must be an object'),
+    body('workDetails').optional().isObject().withMessage('workDetails must be an object')
+  ]),
   workerController.createWorkerActivity
 );
 
@@ -36,14 +37,18 @@ router.put('/activities/:id/approve',
 // Close day
 router.post('/close-day', 
   hasPermission('workers.edit'),
-  validate({ date: 'required|date' }),
+  validate([
+    body('date').isISO8601().toDate().withMessage('date is required and must be a valid date')
+  ]),
   workerController.closeDay
 );
 
 // Close week
 router.post('/close-week',
   hasPermission('workers.edit'),
-  validate({ date: 'required|date' }),
+  validate([
+    body('date').isISO8601().toDate().withMessage('date is required and must be a valid date')
+  ]),
   workerController.closeWeek
 );
 
@@ -52,12 +57,12 @@ router.get('/payments', hasPermission('workers.view'), workerController.getWorke
 
 router.post('/payments', 
   hasPermission('workers.create'),
-  validate({
-    workerId: 'required|string',
-    period: 'required|object',
-    paymentDate: 'required|date',
-    paymentMethod: 'required|in:cash,bank_transfer,cheque'
-  }),
+  validate([
+    body('workerId').notEmpty().isString().withMessage('workerId is required and must be a string'),
+    body('period').notEmpty().isObject().withMessage('period is required and must be an object'),
+    body('paymentDate').isISO8601().toDate().withMessage('paymentDate is required and must be a valid date'),
+    body('paymentMethod').notEmpty().isIn(['cash','bank_transfer','cheque']).withMessage('paymentMethod is required and must be one of: cash, bank_transfer, cheque')
+  ]),
   workerController.createWorkerPayment
 );
 

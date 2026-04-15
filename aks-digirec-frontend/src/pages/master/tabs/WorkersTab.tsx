@@ -25,6 +25,13 @@ const workerTypes = [
   { value: 'Other', label: 'Other' },
 ];
 
+const wageTypes = [
+  { value: 'hourly', label: 'Hourly' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'piece_rate', label: 'Piece Rate' },
+];
+
 const initialFormState = {
   name: '',
   workerType: '',
@@ -35,6 +42,10 @@ const initialFormState = {
   city: '',
   advanceFixed: '',
   notes: '',
+  // Wage fields
+  wageType: '',
+  wageAmount: '',
+  overtimeRate: '',
 };
 
 interface WorkersTabProps {
@@ -95,6 +106,9 @@ export function WorkersTab({ searchQuery }: WorkersTabProps) {
       city: worker.city || '',
       advanceFixed: worker.advanceFixed?.toString() || '',
       notes: worker.notes || '',
+      wageType: worker.wages?.type || '',
+      wageAmount: worker.wages?.amount?.toString() || '',
+      overtimeRate: worker.wages?.overtimeRate?.toString() || '',
     });
     setErrors({});
   };
@@ -115,11 +129,17 @@ export function WorkersTab({ searchQuery }: WorkersTabProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    
+
     setIsLoading(true);
     const submitData = {
       ...formData,
       advanceFixed: formData.advanceFixed ? Number(formData.advanceFixed) : undefined,
+      wages: formData.wageType && formData.wageAmount ? {
+        type: formData.wageType,
+        amount: Number(formData.wageAmount),
+        overtimeRate: formData.overtimeRate ? Number(formData.overtimeRate) : undefined,
+        currency: 'PKR'
+      } : undefined,
     };
     
     try {
@@ -313,7 +333,60 @@ export function WorkersTab({ searchQuery }: WorkersTabProps) {
                 placeholder="0"
               />
             </div>
-            
+
+            {/* Wage Configuration */}
+            <div className="pt-4 border-t border-border">
+              <p className="text-sm font-medium text-muted-foreground mb-3">Wage Configuration</p>
+
+              <div className="space-y-2">
+                <Label htmlFor="wageType">Wage Type</Label>
+                <Select
+                  value={formData.wageType}
+                  onValueChange={(value) => handleChange('wageType', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Wage Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {wageTypes.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 mt-3">
+                <Label htmlFor="wageAmount">Wage Amount (PKR)</Label>
+                <Input
+                  id="wageAmount"
+                  type="number"
+                  value={formData.wageAmount}
+                  onChange={(e) => handleChange('wageAmount', e.target.value)}
+                  placeholder="e.g., 1000"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {formData.wageType === 'hourly' && 'Per hour rate'}
+                  {formData.wageType === 'daily' && 'Per day rate'}
+                  {formData.wageType === 'monthly' && 'Per month salary'}
+                  {formData.wageType === 'piece_rate' && 'Per piece rate'}
+                </p>
+              </div>
+
+              <div className="space-y-2 mt-3">
+                <Label htmlFor="overtimeRate">Overtime Rate (Optional)</Label>
+                <Input
+                  id="overtimeRate"
+                  type="number"
+                  value={formData.overtimeRate}
+                  onChange={(e) => handleChange('overtimeRate', e.target.value)}
+                  placeholder="e.g., 187.5 (1.5x of hourly)"
+                />
+                <p className="text-xs text-muted-foreground">Leave blank for default 1.5x rate</p>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <textarea

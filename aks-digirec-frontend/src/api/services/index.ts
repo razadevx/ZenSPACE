@@ -7,7 +7,15 @@ export {
   customerApi, 
   finishedGoodApi 
 } from './masterService';
-export { cashApi, type CashSummary, type CashTransaction } from './cashService';
+export { 
+  cashApi, 
+  type CashSummary, 
+  type CashTransaction, 
+  type SaleInvoice, 
+  type PurchaseInvoice,
+  type UnifiedSummary,
+  type UnifiedTransaction
+} from './cashService';
 export { reportsApi, type IncomeExpenditureSummary } from './reportsService';
 export { workersApi, type SectionGroup } from './workersService';
 export { attendanceApi, type AttendanceRecord, type AttendanceSummary, type MarkAttendancePayload } from './attendanceService';
