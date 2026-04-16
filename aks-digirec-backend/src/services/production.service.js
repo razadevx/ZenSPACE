@@ -247,15 +247,19 @@ class ProductionService {
    * Get production report
    */
   static async getProductionReport(companyId, fromDate, toDate) {
+    // Include completed batches by completion date, and in-progress/planned by start date
     const query = {
       companyId,
-      status: 'completed',
-      completedAt: { $gte: fromDate, $lte: toDate }
+      $or: [
+        { status: 'completed', completedAt: { $gte: fromDate, $lte: toDate } },
+        { status: { $in: ['in_progress', 'planned', 'on_hold'] }, startedAt: { $gte: fromDate, $lte: toDate } },
+        { status: { $in: ['in_progress', 'planned', 'on_hold'] }, createdAt: { $gte: fromDate, $lte: toDate } }
+      ]
     };
 
     const batches = await ProductionBatch.find(query)
       .populate('finishedGood', 'name code')
-      .sort({ completedAt: -1 });
+      .sort({ completedAt: -1, createdAt: -1 });
 
     const summary = {
       totalBatches: batches.length,

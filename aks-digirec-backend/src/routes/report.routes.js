@@ -40,4 +40,10 @@ router.get('/daily-attendance', hasPermission('reports.view'), reportController.
 router.get('/payroll-summary', hasPermission('reports.view'), reportController.getPayrollSummary);
 router.get('/worker-productivity', hasPermission('reports.view'), reportController.getWorkerProductivity);
 
+// Cost Sheet
+router.get('/cost-sheet', hasPermission('reports.view'), reportController.getCostSheet);
+
+// Income & Expenditure
+router.get('/income-expenditure', hasPermission('reports.view'), reportController.getIncomeExpenditure);
+
 module.exports = router;

@@ -171,8 +171,7 @@ function CashRegisterPageContent() {
           type: first.type,
           amount: first.amount,
           transactionDate: first.transactionDate,
-          status: first.status,
-          companyId: first.companyId
+          status: first.status
         });
       }
 

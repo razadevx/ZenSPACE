@@ -28,6 +28,7 @@ const { errorHandler } = require('./middleware/errorHandler');
 // Import routes
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
+const roleRoutes = require('./routes/role.routes');
 const companyRoutes = require('./routes/company.routes');
 const masterRoutes = require('./routes/master.routes');
 const accountingRoutes = require('./routes/accounting.routes');
@@ -123,6 +124,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/roles', roleRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/master', masterRoutes);
 app.use('/api/accounting', accountingRoutes);

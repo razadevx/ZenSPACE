@@ -1,31 +1,25 @@
 import apiClient from '../interceptors/axiosConfig';
-import type { ApiResponse } from '@/types';
+import type { 
+  ApiResponse, 
+  ProductionBatch, 
+  CreateProductionBatchRequest,
+  ProductionStage 
+} from '@/types';
 
-export interface ProductionBatch {
-  _id: string;
-  batchNo: string;
-  finishedGood: string;
-  productionDate: string;
-  quantity: number;
-  stages: ProductionStage[];
-  status: 'planned' | 'in_progress' | 'completed';
-  totalLoss: number;
-  actualOutput?: number;
-  companyId: string;
-  createdBy: string;
-  createdAt: string;
+export type { ProductionBatch, ProductionStage };
+
+export interface ProductionStats {
+  planned: number;
+  in_progress: number;
+  completed: number;
+  totalBatches: number;
+  totalProduced: number;
 }
 
-export interface ProductionStage {
-  stage: string;
-  stageNumber: number;
-  status: 'pending' | 'in_progress' | 'completed';
-  inputQuantity: number;
-  outputQuantity?: number;
-  rejectedQuantity?: number;
-  workers: string[];
-  startTime?: string;
-  endTime?: string;
+export interface ProductionStageDefinition {
+  id: string;
+  name: string;
+  order: number;
 }
 
 export const productionApi = {
@@ -44,39 +38,75 @@ export const productionApi = {
       pagination: response.data.pagination
     };
   },
-  
-  createProductionBatch: async (data: Partial<ProductionBatch>): Promise<ProductionBatch> => {
+
+  createProductionBatch: async (data: CreateProductionBatchRequest): Promise<ProductionBatch> => {
     const response = await apiClient.post<ApiResponse<ProductionBatch>>('/production/batches', data);
     return response.data.data!;
   },
-  
+
   getProductionBatch: async (id: string): Promise<ProductionBatch> => {
     const response = await apiClient.get<ApiResponse<ProductionBatch>>(`/production/batches/${id}`);
     return response.data.data!;
   },
-  
+
   startProductionBatch: async (id: string): Promise<ProductionBatch> => {
     const response = await apiClient.put<ApiResponse<ProductionBatch>>(`/production/batches/${id}/start`);
     return response.data.data!;
   },
-  
-  updateProductionStage: async (id: string, stageNumber: number, data: {
-    outputQuantity: number;
-    rejectedQuantity: number;
-    workers: string[];
-  }): Promise<ProductionBatch> => {
+
+  updateProductionStage: async (
+    id: string, 
+    stageNumber: number, 
+    data: {
+      outputQuantity: number;
+      rejectedQuantity: number;
+      workers: string[];
+      notes?: string;
+    }
+  ): Promise<ProductionBatch> => {
     const response = await apiClient.put<ApiResponse<ProductionBatch>>(
-      `/production/batches/${id}/stage/${stageNumber}`, 
+      `/production/batches/${id}/stage/${stageNumber}`,
       data
     );
     return response.data.data!;
   },
-  
-  completeProductionBatch: async (id: string, actualOutput: number): Promise<ProductionBatch> => {
+
+  completeProductionBatch: async (
+    id: string, 
+    data: {
+      actualOutput: {
+        quantity: number;
+        approved: number;
+        rejected: number;
+      };
+      quality?: {
+        grade: 'A' | 'B' | 'C' | 'Reject';
+        remarks?: string;
+      };
+    }
+  ): Promise<ProductionBatch> => {
     const response = await apiClient.put<ApiResponse<ProductionBatch>>(
-      `/production/batches/${id}/complete`, 
-      { actualOutput }
+      `/production/batches/${id}/complete`,
+      data
     );
     return response.data.data!;
   },
+
+  // Get production pipeline stages
+  getProductionStages: async (): Promise<ProductionStageDefinition[]> => {
+    const response = await apiClient.get<ApiResponse<ProductionStageDefinition[]>>('/production/stages');
+    return response.data.data || [];
+  },
+
+  // Get production statistics
+  getProductionStats: async (params?: { from?: string; to?: string }): Promise<ProductionStats> => {
+    const response = await apiClient.get<ApiResponse<ProductionStats>>('/production/stats', { params });
+    return response.data.data || {
+      planned: 0,
+      in_progress: 0,
+      completed: 0,
+      totalBatches: 0,
+      totalProduced: 0
+    };
+  }
 };

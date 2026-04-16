@@ -213,3 +213,34 @@ exports.getWorkerProductivity = asyncHandler(async (req, res) => {
   const report = await WorkerService.getProductivityReport(req.companyId, workerId, fromDate, toDate);
   res.status(200).json({ success: true, data: report });
 });
+
+// @desc    Get income and expenditure summary
+// @route   GET /api/reports/income-expenditure
+// @access  Private
+exports.getIncomeExpenditure = asyncHandler(async (req, res) => {
+  const { from, to } = req.query;
+  const fromDate = from ? new Date(from) : new Date(new Date().getFullYear(), 0, 1);
+  const toDate = to ? new Date(to) : new Date();
+  const report = await AccountingService.getProfitLoss(req.companyId, fromDate, toDate);
+  res.status(200).json({
+    success: true,
+    data: {
+      income: report.revenue.total,
+      expenses: report.expenses.total,
+      profit: report.netProfit,
+      fromDate: report.fromDate,
+      toDate: report.toDate
+    }
+  });
+});
+
+// @desc    Get cost sheet report
+// @route   GET /api/reports/cost-sheet
+// @access  Private
+exports.getCostSheet = asyncHandler(async (req, res) => {
+  const { from, to } = req.query;
+  const fromDate = from ? new Date(from) : new Date(new Date().setDate(new Date().getDate() - 30));
+  const toDate = to ? new Date(to) : new Date();
+  const report = await ProductionService.getProductionReport(req.companyId, fromDate, toDate);
+  res.status(200).json({ success: true, data: report });
+});

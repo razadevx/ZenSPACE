@@ -7,11 +7,11 @@ const productionBatchSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  // Batch number
+  // Batch number (auto-generated)
   batchNumber: {
     type: String,
-    required: true,
-    unique: true
+    unique: true,
+    sparse: true
   },
   // Finished good being produced
   finishedGood: {

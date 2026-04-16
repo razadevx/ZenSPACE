@@ -3,17 +3,36 @@ import type { ApiResponse } from '@/types';
 
 export interface Composition {
   _id: string;
-  name: string;
-  type: 'clay' | 'glaze' | 'color';
+  code: string;
+  name: {
+    en: string;
+    ur?: string;
+  } | string;
+  description?: {
+    en?: string;
+    ur?: string;
+  } | string;
+  type: 'body' | 'glaze' | 'engobe' | 'slip' | 'other';
   items: CompositionItem[];
-  outputUnit: string;
-  outputQuantity: number;
-  yieldPercent: number;
-  expectedLoss: number;
+  outputUnit?: string | { _id: string; symbol: string; name: string };
+  totalQuantity?: number;
+  processingTime?: {
+    hours: number;
+    minutes: number;
+  };
+  cost?: {
+    materialCost: number;
+    wastageCost: number;
+    totalCost: number;
+    costPerUnit: number;
+  };
+  status: 'draft' | 'active' | 'inactive';
   isActive: boolean;
   companyId: string;
   createdBy: string;
+  updatedBy?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CompositionItem {
@@ -24,33 +43,94 @@ export interface CompositionItem {
 
 export interface BallMill {
   _id: string;
-  name: string;
+  name: {
+    en: string;
+    ur?: string;
+  } | string;
   code: string;
-  type: 'clay' | 'glaze' | 'color';
-  capacity: number;
-  unit: string;
-  description?: string;
+  description?: {
+    en?: string;
+    ur?: string;
+  } | string;
+  specifications?: {
+    capacity: number;
+    volume?: number;
+    motorPower?: string;
+    liningMaterial?: string;
+    ballCharge?: number;
+    type?: 'clay' | 'glaze' | 'color';
+  };
+  operationalStatus?: 'operational' | 'maintenance' | 'repair' | 'retired';
+  statistics?: {
+    totalBatches: number;
+    totalOutput: number;
+    lastMaintenance?: string;
+    nextMaintenance?: string;
+  };
+  currentBatch?: string | { _id: string; batchNumber: string; status: string };
   isActive: boolean;
   companyId: string;
   createdBy: string;
+  updatedBy?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface BallMillBatch {
   _id: string;
-  ballMill: string;
-  composition: string;
+  batchNumber: string;
+  ballMill: string | { _id: string; name: { en: string; ur?: string } | string; code: string; specifications?: any };
+  composition: string | { _id: string; name: { en: string; ur?: string } | string; code: string; type: string };
   batchDate: string;
-  inputQuantity: number;
-  outputQuantity?: number;
-  status: 'running' | 'completed';
-  processing: {
-    startTime: string;
-    endTime?: string;
+  inputs?: any[];
+  totalInput?: {
+    quantity: number;
+    cost: number;
   };
+  output?: {
+    quantity: number;
+    unit?: string;
+    processedStock?: string;
+    tankNumber?: string;
+  };
+  processing: {
+    startTime?: string;
+    endTime?: string;
+    duration?: number;
+    waterAdded?: number;
+    grindingMedia?: string;
+    operator?: string;
+  };
+  qualityTest?: {
+    testedBy?: string;
+    testedAt?: string;
+    density?: number;
+    viscosity?: number;
+    ph?: number;
+    residue?: number;
+    moisture?: number;
+    status?: 'pass' | 'fail' | 'pending';
+    remarks?: string;
+  };
+  cost?: {
+    materialCost: number;
+    labourCost: number;
+    overheadCost: number;
+    totalCost: number;
+    costPerUnit: number;
+  };
+  wastage?: {
+    quantity: number;
+    percentage: number;
+    reason?: string;
+  };
+  status: 'preparing' | 'running' | 'completed' | 'quality_check' | 'approved' | 'rejected';
+  notes?: string;
   companyId: string;
   createdBy: string;
+  updatedBy?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export const compositionApi = {
@@ -97,8 +177,21 @@ export const compositionApi = {
     return response.data.data!;
   },
   
-  completeBallMillBatch: async (id: string): Promise<BallMillBatch> => {
-    const response = await apiClient.put<ApiResponse<BallMillBatch>>(`/composition/batches/${id}/complete`);
+  completeBallMillBatch: async (id: string, data?: {
+    output?: {
+      quantity: number;
+      tankNumber?: string;
+    };
+    qualityTest?: {
+      density?: number;
+      viscosity?: number;
+      ph?: number;
+      residue?: number;
+      moisture?: number;
+      remarks?: string;
+    };
+  }): Promise<BallMillBatch> => {
+    const response = await apiClient.put<ApiResponse<BallMillBatch>>(`/composition/batches/${id}/complete`, data || {});
     return response.data.data!;
   },
 };

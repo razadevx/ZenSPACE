@@ -114,7 +114,6 @@ export function DashboardPage() {
         
         // Calculate attendance metrics
         const attendanceSummary = attendance.summary;
-        const attendanceData = attendance.data;
 
         setMetrics(prev => ({
           ...prev,

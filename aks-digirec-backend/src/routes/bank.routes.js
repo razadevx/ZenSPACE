@@ -14,10 +14,16 @@ router.get('/accounts', hasPermission('bank.view'), async (req, res) => {
 
 router.post('/accounts', hasPermission('bank.create'), async (req, res) => {
   const BankAccount = require('../models/BankAccount');
+  const openingBalance = req.body.openingBalance || 0;
+
   const account = await BankAccount.create({
     ...req.body,
     companyId: req.companyId,
-    createdBy: req.user._id
+    createdBy: req.user._id,
+    currentBalance: {
+      amount: openingBalance,
+      lastUpdated: new Date()
+    }
   });
   res.status(201).json({ success: true, message: 'Bank account created', data: account });
 });
@@ -38,6 +44,45 @@ router.put('/accounts/:id', hasPermission('bank.edit'), async (req, res) => {
   );
   if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
   res.json({ success: true, message: 'Account updated', data: account });
+});
+
+// Recalculate account balance from all transactions
+router.post('/accounts/:id/recalculate', hasPermission('bank.edit'), async (req, res) => {
+  const BankAccount = require('../models/BankAccount');
+  const BankTransaction = require('../models/BankTransaction');
+
+  const account = await BankAccount.findOne({ _id: req.params.id, companyId: req.companyId });
+  if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+
+  // Get all transactions for this account
+  const transactions = await BankTransaction.find({
+    bankAccount: req.params.id,
+    companyId: req.companyId,
+    status: { $in: ['completed', 'cleared'] }
+  });
+
+  // Start with opening balance
+  let balance = account.openingBalance?.amount || 0;
+
+  // Calculate balance from all transactions
+  const creditTypes = ['deposit', 'transfer_in', 'cheque_deposit', 'interest'];
+  const debitTypes = ['withdrawal', 'transfer_out', 'bank_charges', 'cheque_clearance'];
+
+  for (const txn of transactions) {
+    if (creditTypes.includes(txn.type)) {
+      balance += txn.amount || 0;
+    } else if (debitTypes.includes(txn.type)) {
+      balance -= txn.amount || 0;
+    }
+  }
+
+  // Update account balance
+  await BankAccount.findByIdAndUpdate(req.params.id, {
+    'currentBalance.amount': balance,
+    'currentBalance.lastUpdated': new Date()
+  });
+
+  res.json({ success: true, message: 'Balance recalculated', data: { balance } });
 });
 
 // Bank Transaction routes
@@ -71,11 +116,41 @@ router.get('/transactions', hasPermission('bank.view'), async (req, res) => {
 
 router.post('/transactions', hasPermission('bank.create'), async (req, res) => {
   const BankTransaction = require('../models/BankTransaction');
+  const BankAccount = require('../models/BankAccount');
+
+  // Generate transaction number if not provided
+  const transactionNumber = req.body.transactionNumber || `TXN-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+
   const transaction = await BankTransaction.create({
     ...req.body,
+    transactionNumber,
     companyId: req.companyId,
     createdBy: req.user._id
   });
+
+  // Update account balance based on transaction type
+  const account = await BankAccount.findById(req.body.bankAccount);
+  if (account) {
+    const currentBalance = account.currentBalance?.amount || 0;
+    const amount = req.body.amount || 0;
+
+    // Determine if transaction increases or decreases balance
+    const creditTypes = ['deposit', 'transfer_in', 'cheque_deposit', 'interest'];
+    const debitTypes = ['withdrawal', 'transfer_out', 'bank_charges', 'cheque_clearance'];
+
+    let newBalance = currentBalance;
+    if (creditTypes.includes(req.body.type)) {
+      newBalance = currentBalance + amount;
+    } else if (debitTypes.includes(req.body.type)) {
+      newBalance = currentBalance - amount;
+    }
+
+    await BankAccount.findByIdAndUpdate(req.body.bankAccount, {
+      'currentBalance.amount': newBalance,
+      'currentBalance.lastUpdated': new Date()
+    });
+  }
+
   res.status(201).json({ success: true, message: 'Bank transaction created', data: transaction });
 });
 
@@ -163,11 +238,16 @@ router.get('/cheques', hasPermission('bank.view'), async (req, res) => {
 // Create cheque (bank transaction with cheque details)
 router.post('/cheques', hasPermission('bank.create'), async (req, res) => {
   const BankTransaction = require('../models/BankTransaction');
+  const BankAccount = require('../models/BankAccount');
 
   const type = req.body.type === 'received' ? 'cheque_deposit' : 'cheque_clearance';
 
+  // Generate transaction number if not provided
+  const transactionNumber = req.body.transactionNumber || `CHQ-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+
   const cheque = await BankTransaction.create({
     ...req.body,
+    transactionNumber,
     type,
     companyId: req.companyId,
     createdBy: req.user._id,
@@ -179,6 +259,26 @@ router.post('/cheques', hasPermission('bank.create'), async (req, res) => {
       status: req.body.chequeStatus || 'pending'
     }
   });
+
+  // Update account balance based on cheque type
+  // Only update balance if cheque is cleared (for now, update on creation)
+  const account = await BankAccount.findById(req.body.bankAccount);
+  if (account) {
+    const currentBalance = account.currentBalance?.amount || 0;
+    const amount = req.body.amount || 0;
+
+    let newBalance = currentBalance;
+    if (type === 'cheque_deposit') {
+      newBalance = currentBalance + amount;
+    } else if (type === 'cheque_clearance') {
+      newBalance = currentBalance - amount;
+    }
+
+    await BankAccount.findByIdAndUpdate(req.body.bankAccount, {
+      'currentBalance.amount': newBalance,
+      'currentBalance.lastUpdated': new Date()
+    });
+  }
 
   res.status(201).json({ success: true, message: 'Cheque created', data: cheque });
 });

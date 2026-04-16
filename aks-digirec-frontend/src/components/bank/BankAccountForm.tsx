@@ -16,12 +16,12 @@ const accountSchema = z.object({
   accountNumber: z.string().min(1, 'Account number is required'),
   accountTitle: z.string().min(1, 'Account title is required'),
   accountType: z.enum(['current', 'savings', 'fixed_deposit', 'overdraft', 'loan']),
-  branchName: z.string().optional(),
-  branchCode: z.string().optional(),
-  iban: z.string().optional(),
-  swiftCode: z.string().optional(),
+  branchName: z.string().min(1).or(z.literal('')),
+  branchCode: z.string().min(1).or(z.literal('')),
+  iban: z.string().min(1).or(z.literal('')),
+  swiftCode: z.string().min(1).or(z.literal('')),
   currency: z.string().default('PKR'),
-  openingBalance: z.number().default(0),
+  openingBalance: z.number().min(0).default(0),
 });
 
 type AccountFormData = z.infer<typeof accountSchema>;
@@ -43,10 +43,18 @@ export function BankAccountForm({ isOpen, onClose, account, onSuccess }: BankAcc
     setValue,
     watch,
     reset
-  } = useForm<AccountFormData>({
+  } = useForm({
     resolver: zodResolver(accountSchema),
     defaultValues: {
-      accountType: 'current',
+      code: '',
+      bankName: '',
+      accountNumber: '',
+      accountTitle: '',
+      accountType: 'current' as const,
+      branchName: '',
+      branchCode: '',
+      iban: '',
+      swiftCode: '',
       currency: 'PKR',
       openingBalance: 0
     }

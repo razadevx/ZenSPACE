@@ -382,29 +382,78 @@ export interface BallMillBatch {
 export interface ProductionBatch {
   _id: string;
   companyId: string;
-  batchNo: string;
-  finishedGood: string;
-  productionDate: Date;
-  quantity: number;
+  batchNumber: string;
+  finishedGood: string | FinishedGood;
+  productionDate: string | Date;
+  targetQuantity: number;
+  actualOutput?: {
+    quantity: number;
+    approved: number;
+    rejected: number;
+  };
   stages: ProductionStage[];
-  status: 'planned' | 'in_progress' | 'completed';
-  totalLoss: number;
-  actualOutput?: number;
+  materialsConsumed: MaterialConsumed[];
+  status: 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  currentStage: number;
+  loss: {
+    totalLoss: number;
+    lossPercentage: number;
+    reasons: Array<{
+      stage: string;
+      reason: string;
+      quantity: number;
+    }>;
+  };
+  cost: {
+    materialCost: number;
+    labourCost: number;
+    overheadCost: number;
+    totalCost: number;
+    costPerPiece: number;
+  };
+  startedAt?: string | Date;
+  completedAt?: string | Date;
+  expectedCompletion?: string | Date;
   createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  notes?: string;
 }
 
 export interface ProductionStage {
-  stageId: string;
-  stageName: string;
-  sectionGroup: string;
-  inputQty: number;
-  outputQty: number;
-  lossQty: number;
-  workerActivities: string[];
-  materialConsumed: MaterialConsumed[];
-  completedAt?: Date;
+  stageNumber: number;
+  stage?: string | { _id: string; name: string; code: string };
+  name?: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped';
+  startTime?: string | Date;
+  endTime?: string | Date;
+  inputQuantity?: number;
+  outputQuantity?: number;
+  rejectedQuantity?: number;
+  workers?: string[] | Array<{ _id: string; name?: string; firstName?: string; lastName?: string }>;
+  supervisor?: string;
+  notes?: string;
+}
+
+export interface CreateProductionBatchRequest {
+  finishedGood: string;
+  variant?: {
+    color?: string;
+    size?: string;
+    pattern?: string;
+  };
+  targetQuantity: number;
+  materialsConsumed: Array<{
+    material: string;
+    quantity: number;
+    unit?: string;
+  }>;
+  stages: Array<{
+    stage: string;
+    name: string;
+  }>;
+  expectedCompletion?: string;
+  notes?: string;
 }
 
 export interface MaterialConsumed {

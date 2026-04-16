@@ -3,7 +3,7 @@ import type { LoginCredentials, AuthResponse, ApiResponse, User } from '@/types'
 
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-    const response = await apiClient.post<ApiResponse<AuthResponse>>('/auth/login', credentials);
+    const response = await apiClient.post<ApiResponse<any>>('/auth/login', credentials);
     const d = response.data.data!;
     return {
       user: d.user,
@@ -12,7 +12,7 @@ export const authApi = {
       company: d.company ?? d.user?.company,
     };
   },
-  
+
   signup: async (data: {
     companyName: string;
     name: string;
@@ -22,7 +22,7 @@ export const authApi = {
     city: string;
     country: string;
   }): Promise<AuthResponse> => {
-    const response = await apiClient.post<ApiResponse<AuthResponse>>('/auth/register', data);
+    const response = await apiClient.post<ApiResponse<any>>('/auth/register', data);
     const d = response.data.data!;
     return {
       user: d.user,

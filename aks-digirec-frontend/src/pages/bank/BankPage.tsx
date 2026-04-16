@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
-  Landmark, ArrowUpRight, ArrowDownRight, Plus,
+  Landmark, Plus,
   CheckCircle, XCircle, Clock, Pencil, Trash2, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useUIStore } from '@/stores';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { bankApi, type BankAccount, type BankTransaction, type Cheque } from '@/api/services';
+import { bankApi, type BankAccount, type BankTransaction } from '@/api/services';
+import type { Cheque } from '@/api/services/bankService';
 import { BankAccountForm, BankTransactionForm, ChequeForm } from '@/components/bank';
 import { toast } from 'sonner';
 import gsap from 'gsap';
@@ -109,12 +110,7 @@ export function BankPage() {
     }
   };
 
-  const getTransactionTypeIcon = (type: string) => {
-    const isCredit = ['deposit', 'transfer_in', 'cheque_deposit', 'interest'].includes(type);
-    return isCredit ? 
-      <ArrowDownRight className="h-3 w-3 text-green-500" /> : 
-      <ArrowUpRight className="h-3 w-3 text-red-500" />;
-  };
+  // Note: getTransactionTypeIcon function removed - not currently used
 
   if (isLoading && accounts.length === 0) {
     return (

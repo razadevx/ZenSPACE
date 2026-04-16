@@ -67,7 +67,7 @@ const stockLedgerSchema = new mongoose.Schema({
   reference: {
     documentType: {
       type: String,
-      enum: ['purchase_invoice', 'sale_invoice', 'production_batch', 'stock_adjustment', 
+      enum: ['purchase_invoice', 'sale_invoice', 'production_batch', 'production_order', 'stock_adjustment', 
              'transfer_note', 'ball_mill_batch', 'opening_balance']
     },
     documentId: mongoose.Schema.Types.ObjectId,

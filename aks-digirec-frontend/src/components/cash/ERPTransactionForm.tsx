@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -121,7 +120,6 @@ export function ERPTransactionForm({
   onSuccess,
   defaultDate = new Date().toISOString().split('T')[0],
 }: ERPTransactionFormProps) {
-  const { t } = useTranslation();
 
   // Form State
   const [formData, setFormData] = useState<FormData>({

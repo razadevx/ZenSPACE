@@ -146,6 +146,16 @@ export function truncateText(text: string, maxLength: number): string {
   return text.slice(0, maxLength) + '...';
 }
 
+// Get localized name from translation object or string
+export function getLocalizedName(name: string | { en?: string; ur?: string } | undefined): string {
+  if (!name) return '';
+  if (typeof name === 'string') return name;
+  if (typeof name === 'object') {
+    return name.en || name.ur || '';
+  }
+  return String(name);
+}
+
 // Get file extension
 export function getFileExtension(filename: string): string {
   return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2);
